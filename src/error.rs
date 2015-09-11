@@ -6,19 +6,19 @@ use std::process;
 
 #[derive(Debug)]
 pub struct Error {
-    code: Code,
+    code: RoteError,
     description: String,
 }
 
 #[derive(Debug)]
-pub enum Code {
-    FileNotReadable = 1,
-    Parse,
+pub enum RoteError {
+    FileNotReadableError = 1,
+    ParseError,
 }
 
 impl Error {
     /// Creates a new error with a given code and description.
-    pub fn new(code: Code, description: &str) -> Error {
+    pub fn new(code: RoteError, description: &str) -> Error {
         Error {
             code: code,
             description: String::from(description),

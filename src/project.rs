@@ -1,5 +1,6 @@
 use lua;
-use error::{Code, Error};
+use error::Error;
+use error::RoteError::{FileNotReadableError, ParseError};
 
 pub struct Project {
     state: lua::State,
@@ -19,9 +20,9 @@ impl Project {
         match self.state.do_file(filename) {
             lua::ThreadStatus::Ok => { Ok(()) }
             lua::ThreadStatus::FileError => {
-                Err(Error::new(Code::FileNotReadable, &format!("the file \"{}\" could not be read", filename)))
+                Err(Error::new(FileNotReadableError, &format!("the file \"{}\" could not be read", filename)))
             }
-            _ => { Err(Error::new(Code::Parse, "parse error")) }
+            _ => { Err(Error::new(ParseError, "parse error")) }
         }
     }
 
