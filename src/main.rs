@@ -10,7 +10,7 @@ use std::process;
 
 /// Prints the program usage to the console.
 fn print_usage(options: Options) {
-    let brief = "Usage: rote [options]";
+    let brief = "Usage: rote [options] [task] [args]";
     print!("{}", options.usage(brief));
 }
 
@@ -57,7 +57,7 @@ fn main() {
     }
 
     // Run the default task.
-    if let Err(e) = project.run_task(&task_name, vec![]) {
+    if let Err(e) = project.run_task(&task_name, args) {
         e.die();
     }
 

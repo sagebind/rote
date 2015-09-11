@@ -12,9 +12,11 @@ pub struct Error {
 
 #[derive(Debug)]
 pub enum RoteError {
-    FileNotReadableError = 1,
-    ParseError,
-    TaskError,
+    FileNotReadable = 1,
+    Syntax,
+    Parse,
+    TaskNotFound,
+    Script,
 }
 
 impl Error {
