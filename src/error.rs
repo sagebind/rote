@@ -14,6 +14,7 @@ pub struct Error {
 pub enum RoteError {
     FileNotReadableError = 1,
     ParseError,
+    TaskError,
 }
 
 impl Error {

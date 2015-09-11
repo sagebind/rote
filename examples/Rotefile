@@ -1,0 +1,13 @@
+function build()
+    io.write("build...\n")
+end
+
+function test()
+    io.write("Hello world, from ",_VERSION,"!\n")
+end
+
+function echo(message)
+    io.write(message, "\n")
+end
+
+default = build

@@ -1,1 +1,13 @@
-io.write("Hello world, from ",_VERSION,"!\n")
+function debug()
+    os.execute("cargo build --debug")
+end
+
+function release()
+    os.execute("cargo build --release")
+end
+
+function clean()
+    os.execute("cargo clean")
+end
+
+default = debug

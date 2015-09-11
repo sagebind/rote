@@ -38,11 +38,28 @@ fn main() {
         return;
     }
 
+    // Get the file name of the Rotefile if given.
     let filename = opt_matches.opt_str("f").unwrap_or("Rotefile".to_string());
+
+    // Get all of the task arguments.
+    let mut args = opt_matches.free.clone();
+
+    // Get the name of the task to run.
+    let task_name = if args.is_empty() {
+        "default".to_string()
+    } else {
+        args.remove(0)
+    };
 
     let mut project = project::Project::new();
     if let Err(e) = project.load(&filename) {
         e.die();
     }
+
+    // Run the default task.
+    if let Err(e) = project.run_task(&task_name, vec![]) {
+        e.die();
+    }
+
     project.close();
 }
