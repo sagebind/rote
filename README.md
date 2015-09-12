@@ -43,15 +43,17 @@ To use Rote in your project, create a `Rotefile` in your project root. A `Rotefi
 
 ```lua
 function debug()
-    os.execute("cargo build --debug")
+    cargo.build()
 end
 
 function release()
-    os.execute("cargo build --release")
+    cargo.build {
+        release = true
+    }
 end
 
 function clean()
-    os.execute("cargo clean")
+    cargo.clean()
 end
 
 default = debug
