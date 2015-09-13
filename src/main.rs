@@ -2,7 +2,7 @@ extern crate getopts;
 extern crate lua;
 extern crate term;
 mod error;
-mod project;
+mod runtime;
 
 use getopts::Options;
 use std::env;
@@ -51,15 +51,15 @@ fn main() {
         args.remove(0)
     };
 
-    let mut project = project::Project::new();
-    if let Err(e) = project.load(&filename) {
+    let mut runtime = runtime::Runtime::new();
+    if let Err(e) = runtime.load(&filename) {
         e.die();
     }
 
     // Run the default task.
-    if let Err(e) = project.run_task(&task_name, args) {
+    if let Err(e) = runtime.run_task(&task_name, args) {
         e.die();
     }
 
-    project.close();
+    runtime.close();
 }

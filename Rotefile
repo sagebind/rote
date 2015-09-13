@@ -1,15 +1,19 @@
-function debug()
+task("debug", {}, function()
     cargo.build()
-end
+end)
 
-function release()
+task("release", {}, function()
     cargo.build {
-        release = true,
+        release = true
     }
-end
+end)
 
-function clean()
+task("clean", {}, function()
     cargo.clean()
-end
+end)
 
-default = debug
+task("test", {}, function()
+    echo "test"
+end)
+
+default "debug"

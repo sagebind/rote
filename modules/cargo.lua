@@ -1,11 +1,13 @@
 cargo = {}
 
 function cargo.build(params)
+    local args = {"cargo build --verbose"}
+
     if params and params.release then
-        exec "cargo build --release --verbose"
-    else
-        exec "cargo build --verbose"
+        table.insert(args, "--release")
     end
+
+    exec(table.unpack(args))
 end
 
 function cargo.clean()
