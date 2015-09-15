@@ -19,9 +19,10 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     let mut options = Options::new();
-    options.optflag("h", "help", "Print this help menu and exit.");
+    options.optflag("h", "help",    "Print this help menu and exit.");
     options.optflag("v", "version", "Print the program version and exit.");
-    options.optopt("f", "file", "Specify a Rotefile to read.", "FILE");
+    options.optflag("l", "list",    "List available tasks.");
+    options.optopt("f",  "file",    "Specify a Rotefile to read.", "FILE");
 
     let opt_matches = match options.parse(&args[1..]) {
         Ok(matches) => { matches }
@@ -56,7 +57,16 @@ fn main() {
         e.die();
     }
 
-    // Run the default task.
+    // List all tasks instead of running one.
+    if opt_matches.opt_present("l") {
+        for task in &runtime.tasks {
+            println!("{}", task.1.name);
+        }
+
+        return;
+    }
+
+    // Run the specified task.
     if let Err(e) = runtime.run_task(&task_name, args) {
         e.die();
     }

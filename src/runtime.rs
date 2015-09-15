@@ -12,17 +12,17 @@ static MODULE_CARGO: &'static str = include_str!("../modules/cargo.lua");
 
 /// A Lua script runtime for parsing and executing build script functions.
 pub struct Runtime<'r> {
+    /// A map of all defined tasks.
+    pub tasks: HashMap<&'r str, Task<'r>>,
+
+    /// The name of the default task to run.
+    pub default_task: Option<&'r str>,
+
     /// A raw pointer to the heap location of this runtime object.
     ptr: RuntimePtr<'r>,
 
     /// A Lua interpreter state.
-    state: lua::State,
-
-    /// A map of all defined tasks.
-    tasks: HashMap<&'r str, Task<'r>>,
-
-    /// The name of the default task to run.
-    default_task: Option<&'r str>
+    state: lua::State
 }
 
 /// A raw pointer to a runtime object.
@@ -31,10 +31,10 @@ pub type RuntimePtr<'r> = *mut Runtime<'r>;
 /// A single build task.
 pub struct Task<'t> {
     /// The name of the task.
-    name: &'t str,
+    pub name: &'t str,
 
     /// A list of task names that must be ran before this task.
-    deps: Vec<&'t str>,
+    pub deps: Vec<&'t str>,
 
     /// A reference to this task's callback function.
     func: state::Reference
@@ -44,7 +44,7 @@ impl<'r> Runtime<'r> {
     /// Creates a new runtime instance.
     ///
     /// The runtime instance is allocated onto the heap. This allows the runtime object to be passed
-    /// around as raw pointers in cloure upvalues.
+    /// around as raw pointers in closure upvalues.
     pub fn new() -> Box<Runtime<'r>> {
         let mut runtime = Box::new(Runtime {
             ptr: 0 as RuntimePtr,
