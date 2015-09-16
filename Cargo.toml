@@ -7,6 +7,7 @@ readme = "README.md"
 
 [dependencies]
 getopts = "0.2"
+glob = "0.2"
 term = "0.2"
 
 [dependencies.lua]
