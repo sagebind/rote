@@ -1,3 +1,4 @@
+use glob::glob;
 use lua;
 use lua::ffi;
 use lua::wrapper::state;
@@ -7,8 +8,10 @@ use error::RoteError;
 use std::collections::HashMap;
 
 // Load predefined Lua modules.
-static MODULE_CORE: &'static str = include_str!("../modules/core.lua");
-static MODULE_CARGO: &'static str = include_str!("../modules/cargo.lua");
+const DEFAULT_MODULES: &'static [ &'static str ] = &[
+    include_str!("../modules/core.lua"),
+    include_str!("../modules/cargo.lua")
+];
 
 /// A Lua script runtime for parsing and executing build script functions.
 pub struct Runtime<'r> {
@@ -45,7 +48,7 @@ impl<'r> Runtime<'r> {
     ///
     /// The runtime instance is allocated onto the heap. This allows the runtime object to be passed
     /// around as raw pointers in closure upvalues.
-    pub fn new() -> Box<Runtime<'r>> {
+    pub fn new() -> Result<Box<Runtime<'r>>, Error> {
         let mut runtime = Box::new(Runtime {
             ptr: 0 as RuntimePtr,
             state: lua::State::new(),
@@ -60,8 +63,14 @@ impl<'r> Runtime<'r> {
         runtime.state.open_libs();
         runtime.register_fn("task", task_callback);
         runtime.register_fn("default", default_callback);
+        runtime.register_fn("glob", glob_callback);
 
-        runtime
+        // Load all default Lua modules.
+        for module in DEFAULT_MODULES {
+            try!(runtime.eval(module));
+        }
+
+        Ok(runtime)
     }
 
     // Gets a runtime pointer from a Lua state pointer inside a closure.
@@ -72,10 +81,6 @@ impl<'r> Runtime<'r> {
 
     // Loads a project script.
     pub fn load(&mut self, filename: &str) -> Result<(), Error> {
-        // Load the builtin modules.
-        try!(self.eval(MODULE_CORE));
-        try!(self.eval(MODULE_CARGO));
-
         // Load the given file.
         match self.state.do_file(filename) {
             ThreadStatus::Ok => { }
@@ -212,4 +217,30 @@ unsafe extern "C" fn default_callback(l: *mut ffi::lua_State) -> state::Index {
     (*runtime).default_task = Some(name);
 
     0
+}
+
+unsafe extern "C" fn glob_callback(l: *mut ffi::lua_State) -> state::Index {
+    let runtime = Runtime::from_upvalue(l);
+
+    // Get the pattern as the first argument.
+    let pattern = (*runtime).state.check_string(1);
+
+    // Match the pattern and push the results onto the stack.
+    let mut count = 0;
+    for entry in glob(pattern).unwrap() {
+        match entry {
+            Ok(path) => {
+                // Push the path onto the return value list.
+                (*runtime).state.push_string(path.to_str().unwrap());
+            },
+
+            // if the path matched but was unreadable,
+            // thereby preventing its contents from matching
+            Err(_) => {},
+        }
+
+        count += 1;
+    }
+
+    count
 }

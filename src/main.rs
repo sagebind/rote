@@ -1,6 +1,8 @@
 extern crate getopts;
+extern crate glob;
 extern crate lua;
 extern crate term;
+
 mod error;
 mod runtime;
 
@@ -52,7 +54,8 @@ fn main() {
         args.remove(0)
     };
 
-    let mut runtime = runtime::Runtime::new();
+    // Create a new script runtime.
+    let mut runtime = runtime::Runtime::new().unwrap();
     if let Err(e) = runtime.load(&filename) {
         e.die();
     }
