@@ -27,6 +27,17 @@ function rote.echo(str)
     io.write(rote.expand(str), "\n")
 end
 
+-- Parses an input table of options and merges it with a table of default values.
+function rote.options(given, defaults)
+    if given ~= nil then
+        for k,v in pairs(given) do
+            defaults[k] = v
+        end
+    end
+
+    return defaults
+end
+
 -- Define some global function aliases.
 exec = rote.execute
 echo = rote.echo

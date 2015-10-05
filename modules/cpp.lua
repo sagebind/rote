@@ -1,18 +1,19 @@
 cpp = {}
 
 function cpp.binary(options)
-    local options = options or {}
+    local options = rote.options(options, {
+        out = "bin/a.out",
+        standard = "c++11",
+        debug = true
+    })
 
     local compiler = "g++"
     local linker = "g++"
-    local standard = string.lower(options.standard or "c++11")
-    local debug = options.debug or true
-    local out = options.out or "bin/a.out"
 
-    local compiler_flags = "-Wall --std=" .. standard
+    local compiler_flags = "-Wall --std=" .. string.lower(options.standard)
     local linker_flags = ""
 
-    if debug then
+    if options.debug then
         compiler_flags = compiler_flags .. " -g"
     end
 
@@ -24,7 +25,7 @@ function cpp.binary(options)
         exec(compiler .. " " .. compiler_flags .. " -c -o " .. obj .. " " .. file)
     end
 
-    exec(linker .. " " .. linker_flags .. " -o " .. out .. " " .. table.concat(obj_files, " "))
+    exec(linker .. " " .. linker_flags .. " -o " .. options.out .. " " .. table.concat(obj_files, " "))
 end
 
 return cpp
