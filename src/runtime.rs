@@ -6,6 +6,7 @@ use lua::ThreadStatus;
 use error::Error;
 use error::RoteError;
 use std::collections::HashMap;
+use std::mem;
 
 // Load predefined Lua modules.
 const DEFAULT_MODULES: &'static [ &'static str ] = &[
@@ -31,6 +32,9 @@ pub struct Runtime<'r> {
 /// A raw pointer to a runtime object.
 pub type RuntimePtr<'r> = *mut Runtime<'r>;
 
+/// A function that can be bound to be callable inside the Lua runtime.
+pub type RuntimeFn<'r> = fn(RuntimePtr<'r>) -> i32;
+
 /// A single build task.
 pub struct Task<'t> {
     /// The name of the task.
@@ -47,7 +51,8 @@ impl<'r> Runtime<'r> {
     /// Creates a new runtime instance.
     ///
     /// The runtime instance is allocated onto the heap. This allows the runtime object to be passed
-    /// around as raw pointers in closure upvalues.
+    /// around as raw pointers in closure upvalues. The caller will own the box that owns the
+    /// runtime instance.
     pub fn new() -> Result<Box<Runtime<'r>>, Error> {
         let mut runtime = Box::new(Runtime {
             ptr: 0 as RuntimePtr,
@@ -73,10 +78,10 @@ impl<'r> Runtime<'r> {
         Ok(runtime)
     }
 
-    // Gets a runtime pointer from a Lua state pointer inside a closure.
-    pub unsafe fn from_upvalue<'p>(l: *mut ffi::lua_State) -> RuntimePtr<'p> {
-        let mut state = lua::State::from_ptr(l);
-        state.to_userdata(ffi::lua_upvalueindex(1)) as RuntimePtr
+    // Borrows a runtime from a pointer.
+    pub fn borrow<'p>(ptr: RuntimePtr<'p>) -> &mut Runtime<'p> {
+        assert!(!ptr.is_null());
+        unsafe { &mut *ptr }
     }
 
     // Loads a project script.
@@ -154,12 +159,28 @@ impl<'r> Runtime<'r> {
     }
 
     // Registers a global function in the runtime that can be called by Lua scripts.
-    pub fn register_fn(&mut self, name: &str, func: unsafe extern "C" fn(l: *mut ffi::lua_State) -> state::Index) {
+    pub fn register_fn(&mut self, name: &str, f: RuntimeFn<'r>) {
         unsafe {
             self.state.push_light_userdata(self.ptr);
+            self.state.push_light_userdata(f as *mut u8);
         }
-        self.state.push_closure(Some(func), 1);
+
+        self.state.push_closure(Some(fn_wrapper), 2);
         self.state.set_global(name);
+
+        /// Wrapper function for invoking Rust functions from inside Lua.
+        unsafe extern "C" fn fn_wrapper<'r>(l: *mut ffi::lua_State) -> state::Index {
+            // Get the runtime from the raw pointer.
+            let mut state = lua::State::from_ptr(l);
+            let runtime = state.to_userdata(ffi::lua_upvalueindex(1)) as RuntimePtr;
+
+            // Get the raw pointer and turn it back into a Rust function pointer.
+            let f_raw_ptr = state.to_userdata(ffi::lua_upvalueindex(2)) as *mut u8;
+            let f: RuntimeFn<'r> = mem::transmute(f_raw_ptr);
+
+            // Invoke the function.
+            f(&mut *runtime)
+        }
     }
 
     // Closes the runtime.
@@ -176,54 +197,49 @@ impl<'r> Runtime<'r> {
     }
 }
 
-unsafe extern "C" fn task_callback(l: *mut ffi::lua_State) -> state::Index {
-    let runtime = Runtime::from_upvalue(l);
-
+fn task_callback<'r>(runtime: RuntimePtr<'r>) -> i32 {
     // Get the task name as the first argument.
-    let name = (*runtime).state.check_string(1);
+    let name = Runtime::borrow(runtime).state.check_string(1);
 
     // Second argument is a table of dependent task names.
     let mut deps: Vec<&str> = Vec::new();
-    (*runtime).state.check_type(2, state::Type::Table);
+
+    Runtime::borrow(runtime).state.check_type(2, state::Type::Table);
 
     // Read all of the names in the table and add it to the deps vector.
-    (*runtime).state.push_nil();
-    while (*runtime).state.next(2) {
-        let dep = (*runtime).state.check_string(-1);
-        (*runtime).state.pop(1);
+    Runtime::borrow(runtime).state.push_nil();
+    while Runtime::borrow(runtime).state.next(2) {
+        let dep = Runtime::borrow(runtime).state.check_string(-1);
+        Runtime::borrow(runtime).state.pop(1);
 
         deps.push(dep);
     }
 
     // Third argument is the task function.
-    (*runtime).state.check_type(3, state::Type::Function);
+    Runtime::borrow(runtime).state.check_type(3, state::Type::Function);
 
     // Get a portable reference to the task function.
-    let func = (*runtime).state.reference(ffi::LUA_REGISTRYINDEX);
+    let func = Runtime::borrow(runtime).state.reference(ffi::LUA_REGISTRYINDEX);
 
     // Create the task.
-    (*runtime).create_task(name, deps, func);
+    Runtime::borrow(runtime).create_task(name, deps, func);
 
     0
 }
 
-unsafe extern "C" fn default_callback(l: *mut ffi::lua_State) -> state::Index {
-    let runtime = Runtime::from_upvalue(l);
-
+fn default_callback<'r>(runtime: RuntimePtr<'r>) -> i32 {
     // Get the task name as the first argument.
-    let name = (*runtime).state.check_string(1);
+    let name = Runtime::borrow(runtime).state.check_string(1);
 
     // Set the default task to the given name.
-    (*runtime).default_task = Some(name);
+    Runtime::borrow(runtime).default_task = Some(name);
 
     0
 }
 
-unsafe extern "C" fn glob_callback(l: *mut ffi::lua_State) -> state::Index {
-    let runtime = Runtime::from_upvalue(l);
-
+fn glob_callback<'r>(runtime: RuntimePtr<'r>) -> i32 {
     // Get the pattern as the first argument.
-    let pattern = (*runtime).state.check_string(1);
+    let pattern = Runtime::borrow(runtime).state.check_string(1);
 
     // Match the pattern and push the results onto the stack.
     let mut count = 0;
@@ -231,7 +247,7 @@ unsafe extern "C" fn glob_callback(l: *mut ffi::lua_State) -> state::Index {
         match entry {
             Ok(path) => {
                 // Push the path onto the return value list.
-                (*runtime).state.push_string(path.to_str().unwrap());
+                Runtime::borrow(runtime).state.push_string(path.to_str().unwrap());
             },
 
             // if the path matched but was unreadable,
