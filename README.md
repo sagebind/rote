@@ -38,6 +38,8 @@ Unfortunately, Rote can't build itself yet. For now, you can build it with Cargo
 
 This will compile Rote along with a downloaded Lua 5.3 interpreter.
 
+*Note that Rote currently requires the nightly channel of the Rust compiler.
+
 ## Usage
 To use Rote in your project, create a `Rotefile` in your project root. A `Rotefile` is a valid Lua script and should contain valid Lua code. Below is an example `Rotefile`:
 
