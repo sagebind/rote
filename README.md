@@ -44,21 +44,23 @@ This will compile Rote along with a downloaded Lua 5.3 interpreter.
 To use Rote in your project, create a `Rotefile` in your project root. A `Rotefile` is a valid Lua script and should contain valid Lua code. Below is an example `Rotefile`:
 
 ```lua
-function debug()
-    cargo.build()
-end
+cargo = require("cargo")
 
-function release()
+default "debug"
+
+task("debug", {}, function()
+    cargo.build()
+end)
+
+task("release", {}, function()
     cargo.build {
         release = true
     }
-end
+end)
 
-function clean()
+task("clean", {}, function()
     cargo.clean()
-end
-
-default = debug
+end)
 ```
 
 Now to execute the `debug` task, we can run `rote debug`. Rote will look for the `Rotefile` in the current directory. If the file is in a different directory or has a different name, you can use the `-f` flag to specify a different location:
@@ -72,11 +74,9 @@ See the `default = debug` at the end of the file? That sets the default task to 
 Tasks can also take arguments:
 
 ```lua
-function echo(message)
-    io.write(message, "\n")
-end
-
-default = debug
+task("echo", {}, function(message)
+    echo message
+end)
 ```
 
 Running the `echo` task like this:
