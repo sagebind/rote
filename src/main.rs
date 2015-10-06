@@ -1,3 +1,4 @@
+#![feature(fs_canonicalize)]
 extern crate getopts;
 extern crate glob;
 extern crate lua;
@@ -8,6 +9,8 @@ mod runtime;
 
 use getopts::Options;
 use std::env;
+use std::fs;
+use std::path;
 use std::process;
 
 /// Prints the program usage to the console.
@@ -43,6 +46,10 @@ fn main() {
 
     // Get the file name of the Rotefile if given.
     let filename = opt_matches.opt_str("f").unwrap_or("Rotefile".to_string());
+    let path = fs::canonicalize(path::Path::new(&filename)).unwrap_or_else(|_| {
+        println!("rote: error: the path {} is not a file or is not readable", filename);
+        process::exit(1);
+    });
 
     // Get all of the task arguments.
     let mut args = opt_matches.free.clone();
@@ -53,6 +60,8 @@ fn main() {
     } else {
         args.remove(0)
     };
+
+    println!("Build file: {}\r\n", path.to_str().unwrap());
 
     // Create a new script runtime.
     let mut runtime = runtime::Runtime::new().unwrap();
