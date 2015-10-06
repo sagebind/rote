@@ -11,7 +11,9 @@ use std::mem;
 // Load predefined Lua modules.
 const DEFAULT_MODULES: &'static [ &'static str ] = &[
     include_str!("../modules/core.lua"),
-    include_str!("../modules/cargo.lua")
+    include_str!("../modules/cargo.lua"),
+    include_str!("../modules/cpp.lua"),
+    include_str!("../modules/java.lua")
 ];
 
 /// A Lua script runtime for parsing and executing build script functions.

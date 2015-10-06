@@ -18,6 +18,7 @@ function rote.execute(cmd, ...)
         cmd = cmd .. " " .. rote.escape_arg(arg)
     end
 
+    rote.echo("exec \"" .. rote.expand(cmd) .. "\"");
     return os.execute(rote.expand(cmd))
 end
 
