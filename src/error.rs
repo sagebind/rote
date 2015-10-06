@@ -4,6 +4,7 @@ use std::io;
 use std::io::Write;
 use std::process;
 
+
 #[derive(Debug)]
 pub struct Error {
     code: RoteError,

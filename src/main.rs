@@ -4,14 +4,15 @@ extern crate glob;
 extern crate lua;
 extern crate term;
 
-mod error;
-mod runtime;
-
 use getopts::Options;
 use std::env;
 use std::fs;
 use std::path;
 use std::process;
+
+mod error;
+mod runtime;
+
 
 /// Prints the program usage to the console.
 fn print_usage(options: Options) {

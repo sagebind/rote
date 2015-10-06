@@ -8,12 +8,15 @@ use error::RoteError;
 use std::collections::HashMap;
 use std::mem;
 
+mod functions;
+
+
 // Load predefined Lua modules.
 const DEFAULT_MODULES: &'static [ &'static str ] = &[
-    include_str!("../modules/core.lua"),
-    include_str!("../modules/cargo.lua"),
-    include_str!("../modules/cpp.lua"),
-    include_str!("../modules/java.lua")
+    include_str!("../../modules/core.lua"),
+    include_str!("../../modules/cargo.lua"),
+    include_str!("../../modules/cpp.lua"),
+    include_str!("../../modules/java.lua")
 ];
 
 /// A Lua script runtime for parsing and executing build script functions.
@@ -68,14 +71,16 @@ impl<'r> Runtime<'r> {
 
         // Prepare the environment.
         runtime.state.open_libs();
-        runtime.register_fn("task", task_callback);
-        runtime.register_fn("default", default_callback);
-        runtime.register_fn("glob", glob_callback);
 
-        // Load all default Lua modules.
-        for module in DEFAULT_MODULES {
-            try!(runtime.eval(module));
-        }
+        // Register core functions.
+        try!(runtime.eval("require_ext = require"));
+        runtime.register_fn("require", functions::require);
+        runtime.register_fn("task", functions::task);
+        runtime.register_fn("default", functions::default);
+        runtime.register_fn("glob", functions::glob);
+
+        // Load the core Lua module.
+        try!(runtime.eval(DEFAULT_MODULES[0]));
 
         Ok(runtime)
     }
@@ -197,68 +202,4 @@ impl<'r> Runtime<'r> {
             None
         }
     }
-}
-
-fn task_callback<'r>(runtime: RuntimePtr<'r>) -> i32 {
-    // Get the task name as the first argument.
-    let name = Runtime::borrow(runtime).state.check_string(1);
-
-    // Second argument is a table of dependent task names.
-    let mut deps: Vec<&str> = Vec::new();
-
-    Runtime::borrow(runtime).state.check_type(2, state::Type::Table);
-
-    // Read all of the names in the table and add it to the deps vector.
-    Runtime::borrow(runtime).state.push_nil();
-    while Runtime::borrow(runtime).state.next(2) {
-        let dep = Runtime::borrow(runtime).state.check_string(-1);
-        Runtime::borrow(runtime).state.pop(1);
-
-        deps.push(dep);
-    }
-
-    // Third argument is the task function.
-    Runtime::borrow(runtime).state.check_type(3, state::Type::Function);
-
-    // Get a portable reference to the task function.
-    let func = Runtime::borrow(runtime).state.reference(ffi::LUA_REGISTRYINDEX);
-
-    // Create the task.
-    Runtime::borrow(runtime).create_task(name, deps, func);
-
-    0
-}
-
-fn default_callback<'r>(runtime: RuntimePtr<'r>) -> i32 {
-    // Get the task name as the first argument.
-    let name = Runtime::borrow(runtime).state.check_string(1);
-
-    // Set the default task to the given name.
-    Runtime::borrow(runtime).default_task = Some(name);
-
-    0
-}
-
-fn glob_callback<'r>(runtime: RuntimePtr<'r>) -> i32 {
-    // Get the pattern as the first argument.
-    let pattern = Runtime::borrow(runtime).state.check_string(1);
-
-    // Match the pattern and push the results onto the stack.
-    let mut count = 0;
-    for entry in glob(pattern).unwrap() {
-        match entry {
-            Ok(path) => {
-                // Push the path onto the return value list.
-                Runtime::borrow(runtime).state.push_string(path.to_str().unwrap());
-            },
-
-            // if the path matched but was unreadable,
-            // thereby preventing its contents from matching
-            Err(_) => {},
-        }
-
-        count += 1;
-    }
-
-    count
 }
