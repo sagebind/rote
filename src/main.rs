@@ -25,10 +25,11 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     let mut options = Options::new();
-    options.optflag("h", "help",    "Print this help menu and exit.");
-    options.optflag("v", "version", "Print the program version and exit.");
-    options.optflag("l", "list",    "List available tasks.");
+    options.optflag("d", "dry-run", "Don't actually perform any action.");
     options.optopt("f",  "file",    "Specify a Rotefile to read.", "FILE");
+    options.optflag("h", "help",    "Print this help menu and exit.");
+    options.optflag("l", "list",    "List available tasks.");
+    options.optflag("v", "version", "Print the program version and exit.");
 
     let opt_matches = match options.parse(&args[1..]) {
         Ok(matches) => { matches }

@@ -15,20 +15,25 @@ pub fn require<'r>(runtime: RuntimePtr<'r>) -> i32 {
 
     // Check to see if the module is a built-in Rote module.
     for module in runtime::DEFAULT_MODULES {
-        if module.starts_with(name) {
+        // Find the requested module.
+        if module.contains(&format!("return {}", &name)) {
+            // Execute the module.
             if let Err(e) = Runtime::borrow(runtime).eval(module) {
                 e.die();
             }
 
+            // Return a module reference.
             Runtime::borrow(runtime).state.get_global(name);
             return 1;
         }
     }
 
     // Call default require()
-    Runtime::borrow(runtime).state.get_global("require_ext");
+    Runtime::borrow(runtime).state.get_global("require_native");
     Runtime::borrow(runtime).state.push_string(name);
-    Runtime::borrow(runtime).state.pcall(1, 1, 0);
+    if Runtime::borrow(runtime).state.pcall(1, 1, 0).is_err() {
+        Runtime::borrow(runtime).get_last_error().unwrap().die();
+    }
 
     1
 }

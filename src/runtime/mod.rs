@@ -14,6 +14,7 @@ mod functions;
 // Load predefined Lua modules.
 const DEFAULT_MODULES: &'static [ &'static str ] = &[
     include_str!("../../modules/core.lua"),
+    include_str!("../../modules/table.lua"),
     include_str!("../../modules/cargo.lua"),
     include_str!("../../modules/cpp.lua"),
     include_str!("../../modules/java.lua")
@@ -73,7 +74,7 @@ impl<'r> Runtime<'r> {
         runtime.state.open_libs();
 
         // Register core functions.
-        try!(runtime.eval("require_ext = require"));
+        try!(runtime.eval("require_native = require"));
         runtime.register_fn("require", functions::require);
         runtime.register_fn("task", functions::task);
         runtime.register_fn("default", functions::default);

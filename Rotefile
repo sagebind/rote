@@ -1,3 +1,6 @@
+cargo = require("cargo")
+default "debug"
+
 task("debug", {}, function()
     cargo.build()
 end)
@@ -11,9 +14,3 @@ end)
 task("clean", {}, function()
     cargo.clean()
 end)
-
-task("test", {}, function()
-    echo "test"
-end)
-
-default "debug"
