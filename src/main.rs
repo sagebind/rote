@@ -11,6 +11,7 @@ use std::path;
 use std::process;
 
 mod error;
+mod modules;
 mod runtime;
 
 

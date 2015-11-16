@@ -1,38 +1,30 @@
+use error::Error;
+use error::RoteError;
 use glob::glob;
 use lua;
 use lua::ffi;
-use lua::wrapper::state;
 use lua::ThreadStatus;
-use error::Error;
-use error::RoteError;
+use lua::wrapper::state;
+use modules;
 use std::collections::HashMap;
 use std::mem;
 
 mod functions;
 
 
-// Load predefined Lua modules.
-const DEFAULT_MODULES: &'static [ &'static str ] = &[
-    include_str!("../../modules/core.lua"),
-    include_str!("../../modules/table.lua"),
-    include_str!("../../modules/cargo.lua"),
-    include_str!("../../modules/cpp.lua"),
-    include_str!("../../modules/java.lua")
-];
-
 /// A Lua script runtime for parsing and executing build script functions.
 pub struct Runtime<'r> {
     /// A map of all defined tasks.
-    pub tasks: HashMap<&'r str, Task<'r>>,
+    pub tasks: HashMap<String, Task<'r>>,
 
     /// The name of the default task to run.
-    pub default_task: Option<&'r str>,
+    pub default_task: Option<String>,
 
     /// A raw pointer to the heap location of this runtime object.
     ptr: RuntimePtr<'r>,
 
     /// A Lua interpreter state.
-    state: lua::State
+    state: lua::State,
 }
 
 /// A raw pointer to a runtime object.
@@ -49,8 +41,11 @@ pub struct Task<'t> {
     /// A list of task names that must be ran before this task.
     pub deps: Vec<&'t str>,
 
+    /// Indicates if the task has been satisfied yet during a build.
+    satisfied: bool,
+
     /// A reference to this task's callback function.
-    func: state::Reference
+    func: state::Reference,
 }
 
 impl<'r> Runtime<'r> {
@@ -81,7 +76,7 @@ impl<'r> Runtime<'r> {
         runtime.register_fn("glob", functions::glob);
 
         // Load the core Lua module.
-        try!(runtime.eval(DEFAULT_MODULES[0]));
+        try!(runtime.eval(modules::fetch("core").unwrap()));
 
         Ok(runtime)
     }
@@ -114,29 +109,49 @@ impl<'r> Runtime<'r> {
         let task = Task {
             name: name,
             deps: deps,
-            func: func
+            satisfied: false,
+            func: func,
         };
 
         // Add it to the master list of tasks.
-        self.tasks.insert(name, task);
+        self.tasks.insert(name.to_string(), task);
     }
 
     /// Runs the task with the given name.
     pub fn run_task(&mut self, name: &str, args: Vec<String>) -> Result<(), Error> {
-        let task_name = if name == "default" {
+        // Determine the name of the task to run.
+        let task_name_s: String = if name == "default" {
             if self.default_task.is_none() {
                 return Err(Error::new(RoteError::TaskNotFound, "no default task defined"));
             } else {
-                self.default_task.unwrap()
+                self.default_task.as_ref().unwrap().clone()
             }
         } else {
-            name
+            name.to_string()
         };
+        let task_name = &task_name_s;
 
         if !self.tasks.contains_key(task_name) {
             return Err(Error::new(RoteError::TaskNotFound, &format!("no such task \"{}\"", name)));
         }
 
+        // Check if the task has already been satisfied.
+        if self.tasks.get(task_name).unwrap().satisfied {
+            println!("Nothing to be done for task \"{}\".", task_name);
+            return Ok(());
+        }
+
+        // Run all dependencies first.
+        let deps = { self.tasks.get(task_name).unwrap().deps.clone() };
+        for dep_name in deps {
+            if !self.tasks.contains_key(dep_name) {
+                return Err(Error::new(RoteError::TaskNotFound, &format!("no such task \"{}\"", dep_name)));
+            }
+
+            try!(self.run_task(dep_name, Vec::new()));
+        }
+
+        // Call the task itself.
         {
             let task = self.tasks.get(task_name).unwrap();
 
@@ -153,6 +168,7 @@ impl<'r> Runtime<'r> {
         if self.state.pcall(args.len() as i32, 0, 0).is_err() {
             return Err(self.get_last_error().unwrap());
         }
+        self.state.pop(1);
 
         Ok(())
     }

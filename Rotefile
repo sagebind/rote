@@ -1,16 +1,17 @@
-cargo = require("cargo")
+require "cargo"
 default "debug"
 
-task("debug", {}, function()
+
+task("debug", function()
     cargo.build()
 end)
 
-task("release", {}, function()
+task("release", function()
     cargo.build {
         release = true
     }
 end)
 
-task("clean", {}, function()
+task("clean", function()
     cargo.clean()
 end)

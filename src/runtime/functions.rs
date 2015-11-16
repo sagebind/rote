@@ -1,7 +1,7 @@
 use glob;
 use lua::ffi;
 use lua::wrapper::state;
-use runtime;
+use modules;
 use runtime::{Runtime, RuntimePtr};
 
 
@@ -13,19 +13,16 @@ pub fn require<'r>(runtime: RuntimePtr<'r>) -> i32 {
     // Get the module name as the first argument.
     let name = Runtime::borrow(runtime).state.check_string(1);
 
-    // Check to see if the module is a built-in Rote module.
-    for module in runtime::DEFAULT_MODULES {
-        // Find the requested module.
-        if module.contains(&format!("return {}", &name)) {
-            // Execute the module.
-            if let Err(e) = Runtime::borrow(runtime).eval(module) {
-                e.die();
-            }
-
-            // Return a module reference.
-            Runtime::borrow(runtime).state.get_global(name);
-            return 1;
+    // Check if the name matches a built-in module first.
+    if let Some(module) = modules::fetch(name) {
+        // Execute the module.
+        if let Err(e) = Runtime::borrow(runtime).eval(module) {
+            e.die();
         }
+
+        // Return a module reference.
+        Runtime::borrow(runtime).state.get_global(name);
+        return 1;
     }
 
     // Call default require()
@@ -44,28 +41,33 @@ pub fn require<'r>(runtime: RuntimePtr<'r>) -> i32 {
 ///
 /// # Lua arguments
 /// * `name: string`         - The name of the task.
-/// * `dependencies: string` - A list of task names that the task depends on.
+/// * `dependencies: table`  - A list of task names that the task depends on. (Optional)
 /// * `func: function`       - A function that should be called when the task is run.
 pub fn task<'r>(runtime: RuntimePtr<'r>) -> i32 {
+    let mut arg_index = 1;
+
     // Get the task name as the first argument.
-    let name = Runtime::borrow(runtime).state.check_string(1);
+    let name = Runtime::borrow(runtime).state.check_string(arg_index);
+    arg_index += 1;
 
-    // Second argument is a table of dependent task names.
+    // Second argument is a table of dependent task names (optional).
     let mut deps: Vec<&str> = Vec::new();
+    if Runtime::borrow(runtime).state.type_of(arg_index).unwrap() == state::Type::Table {
+        // Read all of the names in the table and add it to the deps vector.
+        Runtime::borrow(runtime).state.push_nil();
+        while Runtime::borrow(runtime).state.next(arg_index) {
+            Runtime::borrow(runtime).state.push_value(-2);
+            let dep = Runtime::borrow(runtime).state.to_str(-2).unwrap();
+            Runtime::borrow(runtime).state.pop(1);
 
-    Runtime::borrow(runtime).state.check_type(2, state::Type::Table);
+            deps.push(dep);
+        }
 
-    // Read all of the names in the table and add it to the deps vector.
-    Runtime::borrow(runtime).state.push_nil();
-    while Runtime::borrow(runtime).state.next(2) {
-        let dep = Runtime::borrow(runtime).state.check_string(-1);
-        Runtime::borrow(runtime).state.pop(1);
-
-        deps.push(dep);
+        arg_index += 1;
     }
 
     // Third argument is the task function.
-    Runtime::borrow(runtime).state.check_type(3, state::Type::Function);
+    Runtime::borrow(runtime).state.check_type(arg_index, state::Type::Function);
 
     // Get a portable reference to the task function.
     let func = Runtime::borrow(runtime).state.reference(ffi::LUA_REGISTRYINDEX);
@@ -85,7 +87,7 @@ pub fn default<'r>(runtime: RuntimePtr<'r>) -> i32 {
     let name = Runtime::borrow(runtime).state.check_string(1);
 
     // Set the default task to the given name.
-    Runtime::borrow(runtime).default_task = Some(name);
+    Runtime::borrow(runtime).default_task = Some(name.to_string());
 
     0
 }

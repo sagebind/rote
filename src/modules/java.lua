@@ -7,7 +7,8 @@ function java.binary(options)
         warnings = true,
         debug = true,
         compiler = "javac",
-        encoding = "utf-8"
+        encoding = "utf-8",
+        mainClass = "Main"
     })
 
     local compiler_flags = {
@@ -32,6 +33,28 @@ function java.binary(options)
     end
 
     exec(options.compiler .. " " .. table.concat(compiler_flags, " "))
+end
+
+function java.jar(options)
+    local options = rote.options(options, {
+        out = "out.jar",
+        mainClass = "org.myapp.Main",
+        manifest = false
+    })
+
+    local jar_flags = {"-c", "-v", "-f", options.out}
+
+    if options.mainClass then
+        table.insert(jar_flags, "-e")
+        table.insert(jar_flags, options.mainClass)
+    end
+
+    if options.manifest then
+        table.insert(jar_flags, "-m")
+        table.insert(jar_flags, options.manifest)
+    end
+
+    exec("jar " .. table.concat(jar_flags, " ") .. options.srcs)
 end
 
 return java
