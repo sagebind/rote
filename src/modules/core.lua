@@ -1,4 +1,9 @@
+-- Core functions provided by the Rote environment. This module is priveleged
+-- and is always loaded before parsing any configuration files.
+
 rote = {}
+
+local print_raw = print
 
 -- Expands global and environment variables inside a given string.
 function rote.expand(str)
@@ -18,14 +23,14 @@ function rote.execute(cmd, ...)
         cmd = cmd .. " " .. rote.escape_arg(arg)
     end
 
-    rote.echo("[exec] " .. rote.expand(cmd));
+    rote.print(rote.expand(cmd));
     return os.execute(rote.expand(cmd))
 end
 
 -- Prints a string to standard output.
-function rote.echo(str)
+function rote.print(str)
     str = str or ""
-    io.write(rote.expand(str), "\n")
+    print_raw(rote.expand(str))
 end
 
 -- Parses an input table of options and merges it with a table of default values.
@@ -41,6 +46,6 @@ end
 
 -- Define some global function aliases.
 exec = rote.execute
-echo = rote.echo
+print = rote.print
 
 return rote

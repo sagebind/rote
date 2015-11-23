@@ -1,3 +1,5 @@
+-- Module of tasks for Cargo, Rust's package manager.
+
 cargo = {}
 
 function cargo.build(params)

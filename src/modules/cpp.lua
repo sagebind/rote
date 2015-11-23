@@ -1,3 +1,5 @@
+-- Module for C/C++ build tasks.
+
 cpp = {}
 
 function cpp.binary(options)

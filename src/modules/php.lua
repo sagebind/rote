@@ -1,3 +1,5 @@
+-- Module for PHP build and maintennance tasks.
+
 php = {}
 
 

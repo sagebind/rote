@@ -7,6 +7,7 @@ Plain and simple task and build tool.
 
 Rote is an experimental task runner and build tool designed to be easy to use, portable, and fast. Rote uses [Lua](http://www.lua.org) as a configuration syntax. You do not need to be familiar with Lua to use Rote; the syntax is very simple to understand!
 
+
 ## Really? *Another* build tool?
 The ecosystem for build and task tools is already so saturated that Rote can hardly offer anything new, right? Actually, that is the point of Rote entirely. Rote *intentionally* has less features than other tools like Ant or CMake, because too many features can make a build tool too complicated or slow.
 
@@ -26,10 +27,12 @@ For more insulting comparisons to your favorite tool, here is a lengthier list:
 - Grunt is a huge beast of a program.
 - CMake? lol.
 
+
 ## Goals
 - Completely portable binary with very few system dependencies.
 - Familiar syntax that doesn't get in your way when you need to do some logic in your build.
 - Build parallelization with threading.
+
 
 ## Compiling
 Unfortunately, Rote can't build itself yet. For now, you can build it with Cargo:
@@ -40,25 +43,25 @@ This will compile Rote along with a downloaded Lua 5.3 interpreter.
 
 *Note that Rote currently requires the nightly channel of the Rust compiler.
 
+
 ## Usage
 To use Rote in your project, create a `Rotefile` in your project root. A `Rotefile` is a valid Lua script and should contain valid Lua code. Below is an example `Rotefile`:
 
 ```lua
-cargo = require("cargo")
-
+require "cargo"
 default "debug"
 
-task("debug", {}, function()
+task("debug", function()
     cargo.build()
 end)
 
-task("release", {}, function()
+task("release", function()
     cargo.build {
         release = true
     }
 end)
 
-task("clean", {}, function()
+task("clean", function()
     cargo.clean()
 end)
 ```
@@ -67,14 +70,14 @@ Now to execute the `debug` task, we can run `rote debug`. Rote will look for the
 
     rote -f my/Rotefile debug
 
-See the `default = debug` at the end of the file? That sets the default task to `debug`. When `rote` is run without a task name, it assumes the "default" task should be run. To run the "debug" task then, we can just run
+See the `default "debug"` at the end of the file? That sets the default task to `debug`. When `rote` is run without a task name, it assumes the "default" task should be run. To run the "debug" task then, we can just run
 
     rote
 
 Tasks can also take arguments:
 
 ```lua
-task("echo", {}, function(message)
+task("echo", function(message)
     echo message
 end)
 ```
@@ -88,6 +91,17 @@ Will output:
     Hello, future!
 
 See `rote -h` for more on command usage.
+
+
+## Batteries included
+Since your task runner and build tool typically runs before your depency managers, it makes little sense for you to have to install a plethora of plugins before running tasks. That's why Rote includes many common tasks built-in directly; Rote comes batteries included.
+
+If there is a reusable component you'd like to use, but keep out of your actual `Rotefile`, you can save it as a simple Lua module too inside your project repository, or in one of your system's Lua include paths. Then using it in your `Rotefile` is as simple as requiring the module by name:
+
+```lua
+require "my_custom_module"
+```
+
 
 ## License
 All documentation and source code is licensed under the Apache License, Version 2.0 (Apache-2.0). See the [LICENSE](LICENSE) file for details.

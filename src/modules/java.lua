@@ -1,3 +1,5 @@
+-- Module for Java build tasks.
+
 java = {}
 
 function java.binary(options)
