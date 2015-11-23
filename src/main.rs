@@ -25,6 +25,7 @@ fn print_usage(options: Options) {
 fn main() {
     let args: Vec<String> = env::args().collect();
 
+    // Parse command-line flags.
     let mut options = Options::new();
     options.optflag("d", "dry-run", "Don't actually perform any action.");
     options.optopt("f",  "file",    "Specify a Rotefile to read.", "FILE");
@@ -40,8 +41,7 @@ fn main() {
         }
     };
 
-    // If the help flag is present or the user forgot to specify a pattern, show
-    // the usage message.
+    // If the help flag is present show the usage message.
     if opt_matches.opt_present("h") {
         print_usage(options);
         return;
@@ -74,8 +74,8 @@ fn main() {
 
     // List all tasks instead of running one.
     if opt_matches.opt_present("l") {
-        for task in &runtime.tasks {
-            println!("{}", task.1.name);
+        for task in runtime.tasks {
+            println!("{}", task.1.borrow().name);
         }
 
         return;

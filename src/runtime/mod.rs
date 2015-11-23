@@ -6,64 +6,67 @@ use lua::ffi;
 use lua::ThreadStatus;
 use lua::wrapper::state;
 use modules;
-use std::collections::HashMap;
+use std::cell::RefCell;
+use std::collections::{HashMap, LinkedList};
 use std::mem;
+use std::rc::{Rc, Weak};
 
 mod functions;
 
 
 /// A Lua script runtime for parsing and executing build script functions.
-pub struct Runtime<'r> {
+pub struct Runtime {
     /// A map of all defined tasks.
-    pub tasks: HashMap<String, Task<'r>>,
+    pub tasks: HashMap<String, Rc<RefCell<Task>>>,
 
     /// The name of the default task to run.
     pub default_task: Option<String>,
 
+    /// Task execution stack.
+    stack: LinkedList<Weak<RefCell<Task>>>,
+
     /// A raw pointer to the heap location of this runtime object.
-    ptr: RuntimePtr<'r>,
+    ptr: RuntimePtr,
 
     /// A Lua interpreter state.
     state: lua::State,
 }
 
 /// A raw pointer to a runtime object.
-pub type RuntimePtr<'r> = *mut Runtime<'r>;
+pub type RuntimePtr = *mut Runtime;
 
 /// A function that can be bound to be callable inside the Lua runtime.
-pub type RuntimeFn<'r> = fn(RuntimePtr<'r>) -> i32;
+pub type RuntimeFn = fn(RuntimePtr) -> i32;
 
 /// A single build task.
-pub struct Task<'t> {
+pub struct Task {
     /// The name of the task.
-    pub name: &'t str,
+    pub name: String,
 
     /// A list of task names that must be ran before this task.
-    pub deps: Vec<&'t str>,
-
-    /// Indicates if the task has been satisfied yet during a build.
-    satisfied: bool,
+    pub deps: Vec<String>,
 
     /// A reference to this task's callback function.
     func: state::Reference,
 }
 
-impl<'r> Runtime<'r> {
+impl Runtime {
     /// Creates a new runtime instance.
     ///
     /// The runtime instance is allocated onto the heap. This allows the runtime object to be passed
     /// around as raw pointers in closure upvalues. The caller will own the box that owns the
     /// runtime instance.
-    pub fn new() -> Result<Box<Runtime<'r>>, Error> {
+    pub fn new() -> Result<Box<Runtime>, Error> {
         let mut runtime = Box::new(Runtime {
+            tasks: HashMap::new(),
+            default_task: None,
+            stack: LinkedList::new(),
             ptr: 0 as RuntimePtr,
             state: lua::State::new(),
-            tasks: HashMap::new(),
-            default_task: None
         });
 
         // Store a raw self pointer to this runtime object.
-        runtime.ptr = &mut *runtime as RuntimePtr;
+        runtime.ptr = runtime.as_ptr();
 
         // Prepare the environment.
         runtime.state.open_libs();
@@ -73,6 +76,7 @@ impl<'r> Runtime<'r> {
         runtime.register_fn("require", functions::require);
         runtime.register_fn("task", functions::task);
         runtime.register_fn("default", functions::default);
+        runtime.register_fn("print", functions::print);
         runtime.register_fn("glob", functions::glob);
 
         // Load the core Lua module.
@@ -81,8 +85,13 @@ impl<'r> Runtime<'r> {
         Ok(runtime)
     }
 
+    // Gets the runtime as a raw pointer.
+    pub fn as_ptr(&self) -> RuntimePtr {
+        self as *const Runtime as RuntimePtr
+    }
+
     // Borrows a runtime from a pointer.
-    pub fn borrow<'p>(ptr: RuntimePtr<'p>) -> &mut Runtime<'p> {
+    pub fn borrow<'p>(ptr: RuntimePtr) -> &'p mut Runtime {
         assert!(!ptr.is_null());
         unsafe { &mut *ptr }
     }
@@ -104,60 +113,49 @@ impl<'r> Runtime<'r> {
     }
 
     /// Creates a new task.
-    pub fn create_task(&mut self, name: &'r str, deps: Vec<&'r str>, func: state::Reference) {
+    pub fn create_task(&mut self, name: String, deps: Vec<String>, func: state::Reference) {
         // Create a task object.
         let task = Task {
             name: name,
             deps: deps,
-            satisfied: false,
             func: func,
         };
 
         // Add it to the master list of tasks.
-        self.tasks.insert(name.to_string(), task);
+        self.tasks.insert(task.name.clone(), Rc::new(RefCell::new(task)));
     }
 
     /// Runs the task with the given name.
     pub fn run_task(&mut self, name: &str, args: Vec<String>) -> Result<(), Error> {
         // Determine the name of the task to run.
-        let task_name_s: String = if name == "default" {
-            if self.default_task.is_none() {
-                return Err(Error::new(RoteError::TaskNotFound, "no default task defined"));
+        let task_name = if name == "default" {
+            if let Some(ref default_name) = self.default_task {
+                default_name.clone()
             } else {
-                self.default_task.as_ref().unwrap().clone()
+                return Err(Error::new(RoteError::TaskNotFound, "no default task defined"));
             }
         } else {
             name.to_string()
         };
-        let task_name = &task_name_s;
 
-        if !self.tasks.contains_key(task_name) {
+        // Get the task object from the given name.
+        let task = if let Some(task) = self.tasks.get(&task_name) {
+            task.clone()
+        } else {
             return Err(Error::new(RoteError::TaskNotFound, &format!("no such task \"{}\"", name)));
-        }
+        };
 
-        // Check if the task has already been satisfied.
-        if self.tasks.get(task_name).unwrap().satisfied {
-            println!("Nothing to be done for task \"{}\".", task_name);
-            return Ok(());
-        }
+        // Set the active task.
+        self.stack.push_front(Rc::downgrade(&task));
 
         // Run all dependencies first.
-        let deps = { self.tasks.get(task_name).unwrap().deps.clone() };
-        for dep_name in deps {
-            if !self.tasks.contains_key(dep_name) {
-                return Err(Error::new(RoteError::TaskNotFound, &format!("no such task \"{}\"", dep_name)));
-            }
-
-            try!(self.run_task(dep_name, Vec::new()));
+        for dep_name in &task.borrow().deps {
+            try!(self.run_task(&dep_name, Vec::new()));
         }
 
         // Call the task itself.
-        {
-            let task = self.tasks.get(task_name).unwrap();
-
-            // Push the task function onto the stack.
-            self.state.raw_geti(ffi::LUA_REGISTRYINDEX, task.func.value() as i64);
-        }
+        // Push the task function onto the Lua stack.
+        self.state.raw_geti(ffi::LUA_REGISTRYINDEX, task.borrow().func.value() as i64);
 
         // Push the given task arguments onto the stack.
         for string in &args {
@@ -169,6 +167,9 @@ impl<'r> Runtime<'r> {
             return Err(self.get_last_error().unwrap());
         }
         self.state.pop(1);
+
+        // Pop the task off the call stack.
+        self.stack.pop_front();
 
         Ok(())
     }
@@ -183,27 +184,27 @@ impl<'r> Runtime<'r> {
     }
 
     // Registers a global function in the runtime that can be called by Lua scripts.
-    pub fn register_fn(&mut self, name: &str, f: RuntimeFn<'r>) {
+    pub fn register_fn(&mut self, name: &str, f: RuntimeFn) {
         unsafe {
             self.state.push_light_userdata(self.ptr);
-            self.state.push_light_userdata(f as *mut u8);
+            self.state.push_light_userdata(f as *mut usize);
         }
 
         self.state.push_closure(Some(fn_wrapper), 2);
         self.state.set_global(name);
 
         /// Wrapper function for invoking Rust functions from inside Lua.
-        unsafe extern "C" fn fn_wrapper<'r>(l: *mut ffi::lua_State) -> state::Index {
+        unsafe extern fn fn_wrapper<'r>(l: *mut ffi::lua_State) -> state::Index {
             // Get the runtime from the raw pointer.
             let mut state = lua::State::from_ptr(l);
             let runtime = state.to_userdata(ffi::lua_upvalueindex(1)) as RuntimePtr;
 
             // Get the raw pointer and turn it back into a Rust function pointer.
-            let f_raw_ptr = state.to_userdata(ffi::lua_upvalueindex(2)) as *mut u8;
-            let f: RuntimeFn<'r> = mem::transmute(f_raw_ptr);
+            let f_raw_ptr = state.to_userdata(ffi::lua_upvalueindex(2)) as *mut usize;
+            let f: RuntimeFn = mem::transmute(f_raw_ptr);
 
             // Invoke the function.
-            f(&mut *runtime)
+            f(runtime)
         }
     }
 

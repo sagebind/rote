@@ -3,13 +3,14 @@ use lua::ffi;
 use lua::wrapper::state;
 use modules;
 use runtime::{Runtime, RuntimePtr};
+use term;
 
 
 /// Imports a Lua module.
 ///
 /// # Lua arguments
 /// * `name: string` - The name of the module to require.
-pub fn require<'r>(runtime: RuntimePtr<'r>) -> i32 {
+pub fn require<'r>(runtime: RuntimePtr) -> i32 {
     // Get the module name as the first argument.
     let name = Runtime::borrow(runtime).state.check_string(1);
 
@@ -43,7 +44,7 @@ pub fn require<'r>(runtime: RuntimePtr<'r>) -> i32 {
 /// * `name: string`         - The name of the task.
 /// * `dependencies: table`  - A list of task names that the task depends on. (Optional)
 /// * `func: function`       - A function that should be called when the task is run.
-pub fn task<'r>(runtime: RuntimePtr<'r>) -> i32 {
+pub fn task<'r>(runtime: RuntimePtr) -> i32 {
     let mut arg_index = 1;
 
     // Get the task name as the first argument.
@@ -51,7 +52,7 @@ pub fn task<'r>(runtime: RuntimePtr<'r>) -> i32 {
     arg_index += 1;
 
     // Second argument is a table of dependent task names (optional).
-    let mut deps: Vec<&str> = Vec::new();
+    let mut deps: Vec<String> = Vec::new();
     if Runtime::borrow(runtime).state.type_of(arg_index).unwrap() == state::Type::Table {
         // Read all of the names in the table and add it to the deps vector.
         Runtime::borrow(runtime).state.push_nil();
@@ -60,7 +61,7 @@ pub fn task<'r>(runtime: RuntimePtr<'r>) -> i32 {
             let dep = Runtime::borrow(runtime).state.to_str(-2).unwrap();
             Runtime::borrow(runtime).state.pop(1);
 
-            deps.push(dep);
+            deps.push(dep.to_string());
         }
 
         arg_index += 1;
@@ -73,7 +74,7 @@ pub fn task<'r>(runtime: RuntimePtr<'r>) -> i32 {
     let func = Runtime::borrow(runtime).state.reference(ffi::LUA_REGISTRYINDEX);
 
     // Create the task.
-    Runtime::borrow(runtime).create_task(name, deps, func);
+    Runtime::borrow(runtime).create_task(name.to_string(), deps, func);
 
     0
 }
@@ -82,7 +83,7 @@ pub fn task<'r>(runtime: RuntimePtr<'r>) -> i32 {
 ///
 /// # Lua arguments
 /// * `name: string` - The name of the task to set as default.
-pub fn default<'r>(runtime: RuntimePtr<'r>) -> i32 {
+pub fn default<'r>(runtime: RuntimePtr) -> i32 {
     // Get the task name as the first argument.
     let name = Runtime::borrow(runtime).state.check_string(1);
 
@@ -92,11 +93,31 @@ pub fn default<'r>(runtime: RuntimePtr<'r>) -> i32 {
     0
 }
 
+/// Prints text to the console output.
+///
+/// # Lua arguments
+/// * `str: string` - The string to print.
+pub fn print<'r>(runtime: RuntimePtr) -> i32 {
+    let mut out = term::stdout().unwrap();
+
+    if !Runtime::borrow(runtime).stack.is_empty() {
+        let cell = Runtime::borrow(runtime).stack.front().unwrap().upgrade().unwrap();
+        out.fg(term::color::GREEN).unwrap();
+        write!(out, "[{}]\t", cell.borrow().name).unwrap();
+        out.reset().unwrap();
+    }
+
+    let string = Runtime::borrow(runtime).state.check_string(1).to_string();
+    writeln!(out, "{}", &string).unwrap();
+
+    0
+}
+
 /// Searches for paths matching a pattern.
 ///
 /// # Lua arguments
 /// * `pattern: string` - The glob pattern to match.
-pub fn glob<'r>(runtime: RuntimePtr<'r>) -> i32 {
+pub fn glob<'r>(runtime: RuntimePtr) -> i32 {
     // Get the pattern as the first argument.
     let pattern = Runtime::borrow(runtime).state.check_string(1);
 
