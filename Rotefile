@@ -3,6 +3,7 @@ default "debug"
 
 
 task("debug", function()
+    print "Building debug version..."
     cargo.build()
 end)
 
@@ -14,4 +15,20 @@ end)
 
 task("clean", function()
     cargo.clean()
+end)
+
+task("test", function()
+    for _, file in ipairs(glob("tests/*.lua")) do
+        print("[" .. file .. "]")
+        local success, err = pcall(function()
+            return dofile(file)
+        end)
+
+        if not success then
+            print "FAIL!"
+            print("Reason: " .. err)
+        else
+            print "PASS"
+        end
+    end
 end)
