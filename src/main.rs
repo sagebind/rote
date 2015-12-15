@@ -1,4 +1,3 @@
-#![feature(fs_canonicalize)]
 extern crate getopts;
 extern crate glob;
 extern crate lua;
@@ -36,7 +35,7 @@ fn main() {
     let opt_matches = match options.parse(&args[1..]) {
         Ok(matches) => { matches }
         Err(err) => {
-            println!("rote: error: {}", err);
+            println!("error: {}", err);
             process::exit(1);
         }
     };
@@ -50,7 +49,7 @@ fn main() {
     // Get the file name of the Rotefile if given.
     let filename = opt_matches.opt_str("f").unwrap_or("Rotefile".to_string());
     let path = fs::canonicalize(path::Path::new(&filename)).unwrap_or_else(|_| {
-        println!("rote: error: the path {} is not a file or is not readable", filename);
+        println!("error: the path {} is not a file or is not readable", filename);
         process::exit(1);
     });
 

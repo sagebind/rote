@@ -29,7 +29,7 @@ impl Error {
 
     /// Prints the error and terminates the program, exiting with the given error code.
     pub fn die(self) {
-        match writeln!(&mut io::stderr(), "rote: error: {}.", self) {
+        match writeln!(&mut io::stderr(), "error: {}.", self) {
             Ok(_) => {},
             Err(e) => panic!("Unable to write to stderr: {}", e),
         }
