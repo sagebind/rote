@@ -1,42 +1,11 @@
+/// This module contains various global functions that are bound and available inside the Lua runtime.
+
 use glob;
 use lua::ffi;
 use lua::wrapper::state;
-use modules;
 use runtime::{Runtime, RuntimePtr};
 use term;
 
-
-/// Imports a Lua module.
-///
-/// # Lua arguments
-/// * `name: string` - The name of the module to require.
-pub fn require<'r>(runtime: RuntimePtr) -> i32 {
-    // Get the module name as the first argument.
-    let name = Runtime::borrow(runtime).state.check_string(1);
-
-    // Check if the name matches a built-in module first.
-    if let Some(module) = modules::fetch(name) {
-        // Execute the module.
-        if let Err(e) = Runtime::borrow(runtime).eval(module) {
-            e.die();
-        }
-
-        // Return a module reference.
-        Runtime::borrow(runtime).state.get_global(name);
-        return 1;
-    }
-
-    // Call default require()
-    Runtime::borrow(runtime).state.get_global("require_native");
-    Runtime::borrow(runtime).state.push_string(name);
-    if Runtime::borrow(runtime).state.pcall(1, 1, 0).is_err() {
-        Runtime::borrow(runtime).get_last_error().unwrap().die();
-    }
-
-    1
-}
-
-/// Below are various global functions that are bound and available inside the Lua runtime.
 
 /// Defines a new task.
 ///
@@ -121,13 +90,17 @@ pub fn glob<'r>(runtime: RuntimePtr) -> i32 {
     // Get the pattern as the first argument.
     let pattern = Runtime::borrow(runtime).state.check_string(1);
 
+    // Create a table of values to return.
+    Runtime::borrow(runtime).state.new_table();
+
     // Match the pattern and push the results onto the stack.
-    let mut count = 0;
+    let mut index = 1;
     for entry in glob::glob(pattern).unwrap() {
         match entry {
             Ok(path) => {
                 // Push the path onto the return value list.
                 Runtime::borrow(runtime).state.push_string(path.to_str().unwrap());
+                Runtime::borrow(runtime).state.raw_seti(2, index);
             },
 
             // if the path matched but was unreadable,
@@ -135,8 +108,8 @@ pub fn glob<'r>(runtime: RuntimePtr) -> i32 {
             Err(_) => {},
         }
 
-        count += 1;
+        index += 1;
     }
 
-    count
+    1
 }

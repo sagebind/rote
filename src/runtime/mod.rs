@@ -29,7 +29,7 @@ pub struct Runtime {
     ptr: RuntimePtr,
 
     /// A Lua interpreter state.
-    state: lua::State,
+    pub state: lua::State,
 }
 
 /// A raw pointer to a runtime object.
@@ -49,6 +49,18 @@ pub struct Task {
     /// A reference to this task's callback function.
     func: state::Reference,
 }
+
+/// A descriptor struct for a loadable module.
+pub enum Module {
+    /// Entry point for a native runtime module.
+    Native(ModuleTable),
+
+    /// A plain Lua module that is built-in.
+    Builtin(&'static str),
+}
+
+/// An entrypoint table for a native module.
+pub struct ModuleTable(pub &'static [(&'static str, RuntimeFn)]);
 
 impl Runtime {
     /// Creates a new runtime instance.
@@ -72,31 +84,32 @@ impl Runtime {
         runtime.state.open_libs();
 
         // Register core functions.
-        try!(runtime.eval("require_native = require"));
-        runtime.register_fn("require", functions::require);
         runtime.register_fn("task", functions::task);
         runtime.register_fn("default", functions::default);
         runtime.register_fn("print", functions::print);
         runtime.register_fn("glob", functions::glob);
 
+        // Register the module loader.
+        runtime.register_loader(modules::loader);
+
         // Load the core Lua module.
-        try!(runtime.eval(modules::fetch("core").unwrap()));
+        try!(runtime.eval("require 'core'"));
 
         Ok(runtime)
     }
 
-    // Gets the runtime as a raw pointer.
+    /// Gets the runtime as a raw pointer.
     pub fn as_ptr(&self) -> RuntimePtr {
         self as *const Runtime as RuntimePtr
     }
 
-    // Borrows a runtime from a pointer.
+    /// Borrows a runtime from a pointer.
     pub fn borrow<'p>(ptr: RuntimePtr) -> &'p mut Runtime {
         assert!(!ptr.is_null());
         unsafe { &mut *ptr }
     }
 
-    // Loads a project script.
+    /// Loads a project script.
     pub fn load(&mut self, filename: &str) -> Result<(), Error> {
         // Load the given file.
         match self.state.do_file(filename) {
@@ -183,18 +196,60 @@ impl Runtime {
         Ok(())
     }
 
-    // Registers a global function in the runtime that can be called by Lua scripts.
+    /// Registers a global function in the runtime that can be called by Lua scripts.
     pub fn register_fn(&mut self, name: &str, f: RuntimeFn) {
+        self.push_fn(f);
+        self.state.set_global(name);
+    }
+
+    /// Registers a function as a new package loader.
+    ///
+    /// The given loader is inserted into the list of module searchers before other loaders. This
+    /// is to ensure that built-in and native modules are loaded quickly and cannot be shadowed by
+    /// other modules of the same name.
+    pub fn register_loader(&mut self, f: RuntimeFn) {
+        self.state.get_global("package");
+        self.state.get_field(-1, "searchers");
+        let count = self.state.raw_len(-1) as i64;
+
+        // Shift the existing loaders after [1] to the right.
+        for i in 0..(count - 1) {
+            self.state.raw_geti(-1, count - i);
+            self.state.raw_seti(-2, count - i + 1);
+        }
+
+        self.push_fn(f);
+        self.state.raw_seti(-2, 2);
+        self.state.pop(2);
+    }
+
+    /// Raises an error message.
+    pub fn throw_error(&mut self, message: &str) {
+        self.state.location(1);
+        self.state.push_string(message);
+        self.state.concat(2);
+        self.state.error();
+    }
+
+    /// Closes the runtime.
+    pub fn close(self) {
+        self.state.close();
+    }
+
+    /// Pushes a safe runtime function onto the stack.
+    pub fn push_fn(&mut self, f: RuntimeFn) {
+        // First push a pointer to the runtime and a pointer to the given function so that we know
+        // what function to delegate to and what runtime to pass.
         unsafe {
             self.state.push_light_userdata(self.ptr);
             self.state.push_light_userdata(f as *mut usize);
         }
 
+        // Push a wrapper function onto the stack, which delegates to the given function.
         self.state.push_closure(Some(fn_wrapper), 2);
-        self.state.set_global(name);
 
-        /// Wrapper function for invoking Rust functions from inside Lua.
-        unsafe extern fn fn_wrapper<'r>(l: *mut ffi::lua_State) -> state::Index {
+        // Wrapper function for invoking Rust functions from inside Lua.
+        unsafe extern fn fn_wrapper(l: *mut ffi::lua_State) -> state::Index {
             // Get the runtime from the raw pointer.
             let mut state = lua::State::from_ptr(l);
             let runtime = state.to_userdata(ffi::lua_upvalueindex(1)) as RuntimePtr;
@@ -206,11 +261,6 @@ impl Runtime {
             // Invoke the function.
             f(runtime)
         }
-    }
-
-    // Closes the runtime.
-    pub fn close(self) {
-        self.state.close();
     }
 
     fn get_last_error(&mut self) -> Option<Error> {

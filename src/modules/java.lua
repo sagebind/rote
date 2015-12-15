@@ -30,7 +30,7 @@ function java.binary(options)
         table.insert(compiler_flags, "-g:none")
     end
 
-    for i, file in ipairs({glob(options.srcs)}) do
+    for i, file in ipairs(glob(options.srcs)) do
         table.insert(compiler_flags, file)
     end
 
