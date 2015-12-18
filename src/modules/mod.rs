@@ -1,6 +1,6 @@
 use runtime::RuntimeFn;
 
-pub mod fs;
+mod fs;
 
 
 /// A descriptor struct for a loadable module.

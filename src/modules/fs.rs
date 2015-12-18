@@ -26,7 +26,7 @@ pub const MTABLE: ModuleTable = ModuleTable(&[
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to the file to check.
-pub fn exists<'r>(runtime: RuntimePtr) -> i32 {
+fn exists<'r>(runtime: RuntimePtr) -> i32 {
     let path = Runtime::borrow(runtime).state.check_string(1);
 
     Runtime::borrow(runtime).state.push_bool(
@@ -40,7 +40,7 @@ pub fn exists<'r>(runtime: RuntimePtr) -> i32 {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to check.
-pub fn is_dir<'r>(runtime: RuntimePtr) -> i32 {
+fn is_dir<'r>(runtime: RuntimePtr) -> i32 {
     let path = Runtime::borrow(runtime).state.check_string(1);
 
     let metadata = fs::metadata(path);
@@ -55,7 +55,7 @@ pub fn is_dir<'r>(runtime: RuntimePtr) -> i32 {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to check.
-pub fn is_file<'r>(runtime: RuntimePtr) -> i32 {
+fn is_file<'r>(runtime: RuntimePtr) -> i32 {
     let path = Runtime::borrow(runtime).state.check_string(1);
 
     let metadata = fs::metadata(path);
@@ -70,7 +70,7 @@ pub fn is_file<'r>(runtime: RuntimePtr) -> i32 {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to check.
-pub fn is_symlink<'r>(runtime: RuntimePtr) -> i32 {
+fn is_symlink<'r>(runtime: RuntimePtr) -> i32 {
     let path = Runtime::borrow(runtime).state.check_string(1);
 
     let metadata = fs::metadata(path);
@@ -85,7 +85,7 @@ pub fn is_symlink<'r>(runtime: RuntimePtr) -> i32 {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to create the directory.
-pub fn mkdir<'r>(runtime: RuntimePtr) -> i32 {
+fn mkdir<'r>(runtime: RuntimePtr) -> i32 {
     // Get the path as the first argument.
     let path = Runtime::borrow(runtime).state.check_string(1);
 
@@ -101,7 +101,7 @@ pub fn mkdir<'r>(runtime: RuntimePtr) -> i32 {
 /// # Lua arguments
 /// * `source: string`          - Path of the file to copy.
 /// * `dest: string`            - Path to copy the file to.
-pub fn copy<'r>(runtime: RuntimePtr) -> i32 {
+fn copy<'r>(runtime: RuntimePtr) -> i32 {
     let source = Runtime::borrow(runtime).state.check_string(1);
     let dest = Runtime::borrow(runtime).state.check_string(2);
 
@@ -117,7 +117,7 @@ pub fn copy<'r>(runtime: RuntimePtr) -> i32 {
 /// # Lua arguments
 /// * `source: string`          - Path of the file to move.
 /// * `dest: string`            - Path to move the file to.
-pub fn rename<'r>(runtime: RuntimePtr) -> i32 {
+fn rename<'r>(runtime: RuntimePtr) -> i32 {
     let source = Runtime::borrow(runtime).state.check_string(1);
     let destination = Runtime::borrow(runtime).state.check_string(2);
 
@@ -132,7 +132,7 @@ pub fn rename<'r>(runtime: RuntimePtr) -> i32 {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path of the file or directory to remove.
-pub fn remove<'r>(runtime: RuntimePtr) -> i32 {
+fn remove<'r>(runtime: RuntimePtr) -> i32 {
     let path = Runtime::borrow(runtime).state.check_string(1);
 
     if let Ok(metadata) = fs::metadata(path) {
@@ -154,7 +154,7 @@ pub fn remove<'r>(runtime: RuntimePtr) -> i32 {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path of the file to read from.
-pub fn get<'r>(runtime: RuntimePtr) -> i32 {
+fn get<'r>(runtime: RuntimePtr) -> i32 {
     let path = Runtime::borrow(runtime).state.check_string(1);
 
     let file = File::open(path);
@@ -182,7 +182,7 @@ pub fn get<'r>(runtime: RuntimePtr) -> i32 {
 /// # Lua arguments
 /// * `path: string`            - Path to the file to write to.
 /// * `contents: string`        - The contents to write.
-pub fn put<'r>(runtime: RuntimePtr) -> i32 {
+fn put<'r>(runtime: RuntimePtr) -> i32 {
     let path = Runtime::borrow(runtime).state.check_string(1);
     let contents = String::from(Runtime::borrow(runtime).state.check_string(2));
 
@@ -210,7 +210,7 @@ pub fn put<'r>(runtime: RuntimePtr) -> i32 {
 /// # Lua arguments
 /// * `path: string`            - Path to the file to append to.
 /// * `contents: string`        - The contents to append.
-pub fn append<'r>(runtime: RuntimePtr) -> i32 {
+fn append<'r>(runtime: RuntimePtr) -> i32 {
     let path = Runtime::borrow(runtime).state.check_string(1);
     let contents = String::from(Runtime::borrow(runtime).state.check_string(2));
 
@@ -237,7 +237,7 @@ pub fn append<'r>(runtime: RuntimePtr) -> i32 {
 /// # Lua arguments
 /// * `sources: table`          - A list of source files to combine.
 /// * `dest: string`            - The path to the output file.
-pub fn combine<'r>(runtime: RuntimePtr) -> i32 {
+fn combine<'r>(runtime: RuntimePtr) -> i32 {
     if !Runtime::borrow(runtime).state.is_table(1) {
         Runtime::borrow(runtime).throw_error("first argument must be a table");
         return 0;
