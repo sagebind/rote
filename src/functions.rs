@@ -3,9 +3,53 @@
 use glob;
 use lua::ffi;
 use lua::wrapper::state;
+use modules::{fetch, Module};
 use runtime::{Runtime, RuntimePtr};
 use term;
 
+
+/// A Lua module loader that loads built-in modules.
+///
+/// # Lua arguments
+/// * `name: string`         - The name of the module to load.
+pub fn loader<'r>(runtime: RuntimePtr) -> i32 {
+    // Get the module name as the first argument.
+    let name = Runtime::borrow(runtime).state.check_string(1);
+
+    if let Some(module) = fetch(name) {
+        match module {
+            Module::Builtin(source) => {
+                Runtime::borrow(runtime).state.load_string(source);
+            },
+            Module::Native(_) => {
+                Runtime::borrow(runtime).push_fn(loader_native);
+            },
+        };
+    } else {
+        Runtime::borrow(runtime).state.push_string(&format!("\n\tno builtin module '{}'", name));
+    }
+    1
+}
+
+/// Native module loader callback.
+fn loader_native<'r>(runtime: RuntimePtr) -> i32 {
+    let name = Runtime::borrow(runtime).state.check_string(1);
+
+    if let Some(Module::Native(mtable)) = fetch(name) {
+        Runtime::borrow(runtime).state.new_table();
+
+        for &(name, func) in mtable.0 {
+            Runtime::borrow(runtime).push_fn(func);
+            Runtime::borrow(runtime).state.set_field(-2, name);
+        }
+
+        Runtime::borrow(runtime).state.set_global(name);
+
+        1
+    } else {
+        0
+    }
+}
 
 /// Defines a new task.
 ///

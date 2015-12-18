@@ -1,4 +1,7 @@
-use runtime::{ModuleTable, Runtime, RuntimePtr};
+/// Module that provides various functions for working with files and the file system.
+
+use modules::ModuleTable;
+use runtime::{Runtime, RuntimePtr};
 use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io::prelude::*;
@@ -79,6 +82,9 @@ pub fn is_symlink<'r>(runtime: RuntimePtr) -> i32 {
 }
 
 /// Creates a directory.
+///
+/// # Lua arguments
+/// * `path: string`            - Path to create the directory.
 pub fn mkdir<'r>(runtime: RuntimePtr) -> i32 {
     // Get the path as the first argument.
     let path = Runtime::borrow(runtime).state.check_string(1);
@@ -107,6 +113,10 @@ pub fn copy<'r>(runtime: RuntimePtr) -> i32 {
 }
 
 /// Moves a file from one name to another.
+///
+/// # Lua arguments
+/// * `source: string`          - Path of the file to move.
+/// * `dest: string`            - Path to move the file to.
 pub fn rename<'r>(runtime: RuntimePtr) -> i32 {
     let source = Runtime::borrow(runtime).state.check_string(1);
     let destination = Runtime::borrow(runtime).state.check_string(2);
@@ -119,6 +129,9 @@ pub fn rename<'r>(runtime: RuntimePtr) -> i32 {
 }
 
 /// Removes a file or empty directory.
+///
+/// # Lua arguments
+/// * `path: string`            - Path of the file or directory to remove.
 pub fn remove<'r>(runtime: RuntimePtr) -> i32 {
     let path = Runtime::borrow(runtime).state.check_string(1);
 
@@ -138,6 +151,9 @@ pub fn remove<'r>(runtime: RuntimePtr) -> i32 {
 }
 
 /// Reads an entire file and returns its contents.
+///
+/// # Lua arguments
+/// * `path: string`            - Path of the file to read from.
 pub fn get<'r>(runtime: RuntimePtr) -> i32 {
     let path = Runtime::borrow(runtime).state.check_string(1);
 

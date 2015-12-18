@@ -10,6 +10,7 @@ use std::path;
 use std::process;
 
 mod error;
+mod functions;
 mod modules;
 mod runtime;
 

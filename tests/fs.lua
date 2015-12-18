@@ -1,4 +1,4 @@
-fs = require "fs"
+require "fs"
 
 
 assert(fs.exists("tests") == true)

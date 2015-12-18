@@ -1,17 +1,15 @@
 use error::Error;
 use error::RoteError;
+use functions;
 use glob::glob;
 use lua;
 use lua::ffi;
 use lua::ThreadStatus;
 use lua::wrapper::state;
-use modules;
 use std::cell::RefCell;
 use std::collections::{HashMap, LinkedList};
 use std::mem;
 use std::rc::{Rc, Weak};
-
-mod functions;
 
 
 /// A Lua script runtime for parsing and executing build script functions.
@@ -23,7 +21,7 @@ pub struct Runtime {
     pub default_task: Option<String>,
 
     /// Task execution stack.
-    stack: LinkedList<Weak<RefCell<Task>>>,
+    pub stack: LinkedList<Weak<RefCell<Task>>>,
 
     /// A raw pointer to the heap location of this runtime object.
     ptr: RuntimePtr,
@@ -49,18 +47,6 @@ pub struct Task {
     /// A reference to this task's callback function.
     func: state::Reference,
 }
-
-/// A descriptor struct for a loadable module.
-pub enum Module {
-    /// Entry point for a native runtime module.
-    Native(ModuleTable),
-
-    /// A plain Lua module that is built-in.
-    Builtin(&'static str),
-}
-
-/// An entrypoint table for a native module.
-pub struct ModuleTable(pub &'static [(&'static str, RuntimeFn)]);
 
 impl Runtime {
     /// Creates a new runtime instance.
@@ -90,7 +76,7 @@ impl Runtime {
         runtime.register_fn("glob", functions::glob);
 
         // Register the module loader.
-        runtime.register_loader(modules::loader);
+        runtime.register_loader(functions::loader);
 
         // Load the core Lua module.
         try!(runtime.eval("require 'core'"));
