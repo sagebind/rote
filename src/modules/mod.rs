@@ -61,6 +61,9 @@ fn loader_native<'r>(runtime: RuntimePtr) -> i32 {
             Runtime::borrow(runtime).push_fn(func);
             Runtime::borrow(runtime).state.set_field(-2, name);
         }
+
+        Runtime::borrow(runtime).state.set_global(name);
+
         1
     } else {
         0
