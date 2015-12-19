@@ -1,7 +1,7 @@
 /// Module that provides various functions for working with files and the file system.
 
 use modules::ModuleTable;
-use runtime::{Runtime, RuntimePtr};
+use runtime::Runtime;
 use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io::prelude::*;
@@ -26,10 +26,10 @@ pub const MTABLE: ModuleTable = ModuleTable(&[
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to the file to check.
-fn exists<'r>(runtime: RuntimePtr) -> i32 {
-    let path = Runtime::borrow(runtime).state.check_string(1);
+fn exists<'r>(runtime: &mut Runtime) -> i32 {
+    let path = runtime.state().check_string(1).to_string();
 
-    Runtime::borrow(runtime).state.push_bool(
+    runtime.state().push_bool(
         fs::metadata(path).is_ok()
     );
 
@@ -40,11 +40,11 @@ fn exists<'r>(runtime: RuntimePtr) -> i32 {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to check.
-fn is_dir<'r>(runtime: RuntimePtr) -> i32 {
-    let path = Runtime::borrow(runtime).state.check_string(1);
+fn is_dir<'r>(runtime: &mut Runtime) -> i32 {
+    let path = runtime.state().check_string(1).to_string();
 
     let metadata = fs::metadata(path);
-    Runtime::borrow(runtime).state.push_bool(
+    runtime.state().push_bool(
         metadata.is_ok() && metadata.unwrap().file_type().is_dir()
     );
 
@@ -55,11 +55,11 @@ fn is_dir<'r>(runtime: RuntimePtr) -> i32 {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to check.
-fn is_file<'r>(runtime: RuntimePtr) -> i32 {
-    let path = Runtime::borrow(runtime).state.check_string(1);
+fn is_file<'r>(runtime: &mut Runtime) -> i32 {
+    let path = runtime.state().check_string(1).to_string();
 
     let metadata = fs::metadata(path);
-    Runtime::borrow(runtime).state.push_bool(
+    runtime.state().push_bool(
         metadata.is_ok() && metadata.unwrap().file_type().is_file()
     );
 
@@ -70,11 +70,11 @@ fn is_file<'r>(runtime: RuntimePtr) -> i32 {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to check.
-fn is_symlink<'r>(runtime: RuntimePtr) -> i32 {
-    let path = Runtime::borrow(runtime).state.check_string(1);
+fn is_symlink<'r>(runtime: &mut Runtime) -> i32 {
+    let path = runtime.state().check_string(1).to_string();
 
     let metadata = fs::metadata(path);
-    Runtime::borrow(runtime).state.push_bool(
+    runtime.state().push_bool(
         metadata.is_ok() && metadata.unwrap().file_type().is_symlink()
     );
 
@@ -85,12 +85,12 @@ fn is_symlink<'r>(runtime: RuntimePtr) -> i32 {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to create the directory.
-fn mkdir<'r>(runtime: RuntimePtr) -> i32 {
+fn mkdir<'r>(runtime: &mut Runtime) -> i32 {
     // Get the path as the first argument.
-    let path = Runtime::borrow(runtime).state.check_string(1);
+    let path = runtime.state().check_string(1).to_string();
 
-    if fs::create_dir(path).is_err() {
-        Runtime::borrow(runtime).throw_error(&format!("file \"{}\" exists", path));
+    if fs::create_dir(&path).is_err() {
+        runtime.throw_error(&format!("file \"{}\" exists", path));
     }
 
     0
@@ -101,12 +101,12 @@ fn mkdir<'r>(runtime: RuntimePtr) -> i32 {
 /// # Lua arguments
 /// * `source: string`          - Path of the file to copy.
 /// * `dest: string`            - Path to copy the file to.
-fn copy<'r>(runtime: RuntimePtr) -> i32 {
-    let source = Runtime::borrow(runtime).state.check_string(1);
-    let dest = Runtime::borrow(runtime).state.check_string(2);
+fn copy<'r>(runtime: &mut Runtime) -> i32 {
+    let source = runtime.state().check_string(1).to_string();
+    let dest = runtime.state().check_string(2).to_string();
 
-    if fs::copy(source, dest).is_err() {
-        Runtime::borrow(runtime).throw_error(&format!("failed to copy \"{}\"", source));
+    if fs::copy(&source, dest).is_err() {
+        runtime.throw_error(&format!("failed to copy \"{}\"", source));
     }
 
     0
@@ -117,12 +117,12 @@ fn copy<'r>(runtime: RuntimePtr) -> i32 {
 /// # Lua arguments
 /// * `source: string`          - Path of the file to move.
 /// * `dest: string`            - Path to move the file to.
-fn rename<'r>(runtime: RuntimePtr) -> i32 {
-    let source = Runtime::borrow(runtime).state.check_string(1);
-    let destination = Runtime::borrow(runtime).state.check_string(2);
+fn rename<'r>(runtime: &mut Runtime) -> i32 {
+    let source = runtime.state().check_string(1).to_string();
+    let destination = runtime.state().check_string(2).to_string();
 
     if fs::rename(source, destination).is_err() {
-        Runtime::borrow(runtime).throw_error("no such file or directory");
+        runtime.throw_error("no such file or directory");
     }
 
     0
@@ -132,17 +132,17 @@ fn rename<'r>(runtime: RuntimePtr) -> i32 {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path of the file or directory to remove.
-fn remove<'r>(runtime: RuntimePtr) -> i32 {
-    let path = Runtime::borrow(runtime).state.check_string(1);
+fn remove<'r>(runtime: &mut Runtime) -> i32 {
+    let path = runtime.state().check_string(1).to_string();
 
-    if let Ok(metadata) = fs::metadata(path) {
+    if let Ok(metadata) = fs::metadata(&path) {
         if metadata.file_type().is_dir() {
             if fs::remove_dir(path).is_err() {
-                Runtime::borrow(runtime).throw_error("failed to remove directory");
+                runtime.throw_error("failed to remove directory");
             }
         } else {
             if fs::remove_file(path).is_err() {
-                Runtime::borrow(runtime).throw_error("failed to remove file");
+                runtime.throw_error("failed to remove file");
             }
         }
     }
@@ -154,13 +154,13 @@ fn remove<'r>(runtime: RuntimePtr) -> i32 {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path of the file to read from.
-fn get<'r>(runtime: RuntimePtr) -> i32 {
-    let path = Runtime::borrow(runtime).state.check_string(1);
+fn get<'r>(runtime: &mut Runtime) -> i32 {
+    let path = runtime.state().check_string(1).to_string();
 
     let file = File::open(path);
 
     if file.is_err() {
-        Runtime::borrow(runtime).throw_error("failed to open file");
+        runtime.throw_error("failed to open file");
         return 0;
     }
 
@@ -168,11 +168,11 @@ fn get<'r>(runtime: RuntimePtr) -> i32 {
     let mut buffer = String::new();
 
     if file.read_to_string(&mut buffer).is_err() {
-        Runtime::borrow(runtime).throw_error("failed to read file");
+        runtime.throw_error("failed to read file");
         return 0;
     }
 
-    Runtime::borrow(runtime).state.push_string(&buffer);
+    runtime.state().push_string(&buffer);
 
     1
 }
@@ -182,9 +182,9 @@ fn get<'r>(runtime: RuntimePtr) -> i32 {
 /// # Lua arguments
 /// * `path: string`            - Path to the file to write to.
 /// * `contents: string`        - The contents to write.
-fn put<'r>(runtime: RuntimePtr) -> i32 {
-    let path = Runtime::borrow(runtime).state.check_string(1);
-    let contents = String::from(Runtime::borrow(runtime).state.check_string(2));
+fn put<'r>(runtime: &mut Runtime) -> i32 {
+    let path = runtime.state().check_string(1).to_string();
+    let contents = String::from(runtime.state().check_string(2));
 
     let file = OpenOptions::new()
                 .write(true)
@@ -193,13 +193,13 @@ fn put<'r>(runtime: RuntimePtr) -> i32 {
                 .open(path);
 
     if file.is_err() {
-        Runtime::borrow(runtime).throw_error("failed to open file");
+        runtime.throw_error("failed to open file");
         return 0;
     }
 
     let mut file = file.unwrap();
     if file.write_all(contents.as_bytes()).is_err() {
-        Runtime::borrow(runtime).throw_error("failed to write to file");
+        runtime.throw_error("failed to write to file");
     }
 
     0
@@ -210,9 +210,9 @@ fn put<'r>(runtime: RuntimePtr) -> i32 {
 /// # Lua arguments
 /// * `path: string`            - Path to the file to append to.
 /// * `contents: string`        - The contents to append.
-fn append<'r>(runtime: RuntimePtr) -> i32 {
-    let path = Runtime::borrow(runtime).state.check_string(1);
-    let contents = String::from(Runtime::borrow(runtime).state.check_string(2));
+fn append<'r>(runtime: &mut Runtime) -> i32 {
+    let path = runtime.state().check_string(1).to_string();
+    let contents = String::from(runtime.state().check_string(2));
 
     let file = OpenOptions::new()
                 .write(true)
@@ -220,13 +220,13 @@ fn append<'r>(runtime: RuntimePtr) -> i32 {
                 .open(path);
 
     if file.is_err() {
-        Runtime::borrow(runtime).throw_error("failed to open file");
+        runtime.throw_error("failed to open file");
         return 0;
     }
 
     let mut file = file.unwrap();
     if file.write_all(contents.as_bytes()).is_err() {
-        Runtime::borrow(runtime).throw_error("failed to write to file");
+        runtime.throw_error("failed to write to file");
     }
 
     0
@@ -237,36 +237,36 @@ fn append<'r>(runtime: RuntimePtr) -> i32 {
 /// # Lua arguments
 /// * `sources: table`          - A list of source files to combine.
 /// * `dest: string`            - The path to the output file.
-fn combine<'r>(runtime: RuntimePtr) -> i32 {
-    if !Runtime::borrow(runtime).state.is_table(1) {
-        Runtime::borrow(runtime).throw_error("first argument must be a table");
+fn combine<'r>(runtime: &mut Runtime) -> i32 {
+    if !runtime.state().is_table(1) {
+        runtime.throw_error("first argument must be a table");
         return 0;
     }
 
     // Open the output file for writing.
-    let dest = Runtime::borrow(runtime).state.check_string(2);
+    let dest = runtime.state().check_string(2).to_string();
     let out_file = OpenOptions::new()
                 .write(true)
                 .truncate(true)
                 .create(true)
-                .open(dest);
+                .open(&dest);
 
     if out_file.is_err() {
-        Runtime::borrow(runtime).throw_error(&format!("failed to open file \"{}\"", dest));
+        runtime.throw_error(&format!("failed to open file \"{}\"", dest));
         return 0;
     }
 
     let mut out_file = out_file.unwrap();
 
     // Walk through each path in the sources table and write their contents.
-    Runtime::borrow(runtime).state.push_nil();
-    while Runtime::borrow(runtime).state.next(1) {
-        Runtime::borrow(runtime).state.push_value(-2);
-        let source = Runtime::borrow(runtime).state.to_str(-2).unwrap();
+    runtime.state().push_nil();
+    while runtime.state().next(1) {
+        runtime.state().push_value(-2);
+        let source = runtime.state().to_str(-2).unwrap().to_string();
 
-        let in_file = File::open(source);
+        let in_file = File::open(&source);
         if in_file.is_err() {
-            Runtime::borrow(runtime).throw_error(&format!("failed to open file \"{}\"", source));
+            runtime.throw_error(&format!("failed to open file \"{}\"", source));
             return 0;
         }
 
@@ -275,17 +275,17 @@ fn combine<'r>(runtime: RuntimePtr) -> i32 {
         let mut buffer = String::new();
 
         if in_file.read_to_string(&mut buffer).is_err() {
-            Runtime::borrow(runtime).throw_error(&format!("failed to read file \"{}\"", source));
+            runtime.throw_error(&format!("failed to read file \"{}\"", source));
             return 0;
         }
 
         // Write the source file contents into the output file.
         if out_file.write_all(buffer.as_bytes()).is_err() {
-            Runtime::borrow(runtime).throw_error(&format!("failed to write to file \"{}\"", dest));
+            runtime.throw_error(&format!("failed to write to file \"{}\"", dest));
             return 0;
         }
 
-        Runtime::borrow(runtime).state.pop(1);
+        runtime.state().pop(1);
     }
 
     0

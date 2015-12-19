@@ -1,11 +1,8 @@
 use error::Error;
 use error::RoteError;
 use functions;
-use glob::glob;
 use lua;
 use lua::ffi;
-use lua::ThreadStatus;
-use lua::wrapper::state;
 use std::cell::RefCell;
 use std::collections::{HashMap, LinkedList};
 use std::mem;
@@ -24,17 +21,14 @@ pub struct Runtime {
     pub stack: LinkedList<Weak<RefCell<Task>>>,
 
     /// A raw pointer to the heap location of this runtime object.
-    ptr: RuntimePtr,
+    ptr: *mut Runtime,
 
     /// A Lua interpreter state.
-    pub state: lua::State,
+    state: lua::State,
 }
 
-/// A raw pointer to a runtime object.
-pub type RuntimePtr = *mut Runtime;
-
 /// A function that can be bound to be callable inside the Lua runtime.
-pub type RuntimeFn = fn(RuntimePtr) -> i32;
+pub type RuntimeFn = fn(&mut Runtime) -> i32;
 
 /// A single build task.
 pub struct Task {
@@ -45,7 +39,7 @@ pub struct Task {
     pub deps: Vec<String>,
 
     /// A reference to this task's callback function.
-    func: state::Reference,
+    func: lua::Reference,
 }
 
 impl Runtime {
@@ -59,7 +53,7 @@ impl Runtime {
             tasks: HashMap::new(),
             default_task: None,
             stack: LinkedList::new(),
-            ptr: 0 as RuntimePtr,
+            ptr: 0 as *mut Runtime,
             state: lua::State::new(),
         });
 
@@ -84,23 +78,23 @@ impl Runtime {
         Ok(runtime)
     }
 
-    /// Gets the runtime as a raw pointer.
-    pub fn as_ptr(&self) -> RuntimePtr {
-        self as *const Runtime as RuntimePtr
-    }
-
-    /// Borrows a runtime from a pointer.
-    pub fn borrow<'p>(ptr: RuntimePtr) -> &'p mut Runtime {
-        assert!(!ptr.is_null());
-        unsafe { &mut *ptr }
+    /// Gets a mutable instance of the Lua interpreter state.
+    ///
+    /// This function uses the direct lua_State pointer, so multiple owners can all mutate the same
+    /// state simultaneously. Obviously this is a little unsafe, so use responsibly.
+    pub fn state(&mut self) -> lua::State {
+        let ptr = self.state.as_ptr();
+        unsafe { lua::State::from_ptr(ptr) }
     }
 
     /// Loads a project script.
     pub fn load(&mut self, filename: &str) -> Result<(), Error> {
         // Load the given file.
-        match self.state.do_file(filename) {
-            ThreadStatus::Ok => { }
-            ThreadStatus::FileError => {
+        let result = self.state().do_file(filename);
+
+        match result {
+            lua::ThreadStatus::Ok => { }
+            lua::ThreadStatus::FileError => {
                 return Err(Error::new(RoteError::FileNotReadable, &format!("the file \"{}\" could not be read", filename)));
             }
             _ => {
@@ -112,7 +106,7 @@ impl Runtime {
     }
 
     /// Creates a new task.
-    pub fn create_task(&mut self, name: String, deps: Vec<String>, func: state::Reference) {
+    pub fn create_task(&mut self, name: String, deps: Vec<String>, func: lua::Reference) {
         // Create a task object.
         let task = Task {
             name: name,
@@ -154,7 +148,7 @@ impl Runtime {
 
         // Call the task itself.
         // Push the task function onto the Lua stack.
-        self.state.raw_geti(ffi::LUA_REGISTRYINDEX, task.borrow().func.value() as i64);
+        self.state.raw_geti(lua::REGISTRYINDEX, task.borrow().func.value() as i64);
 
         // Push the given task arguments onto the stack.
         for string in &args {
@@ -235,20 +229,26 @@ impl Runtime {
         self.state.push_closure(Some(fn_wrapper), 2);
 
         // Wrapper function for invoking Rust functions from inside Lua.
-        unsafe extern fn fn_wrapper(l: *mut ffi::lua_State) -> state::Index {
+        unsafe extern fn fn_wrapper(l: *mut ffi::lua_State) -> i32 {
             // Get the runtime from the raw pointer.
             let mut state = lua::State::from_ptr(l);
-            let runtime = state.to_userdata(ffi::lua_upvalueindex(1)) as RuntimePtr;
+            let runtime = state.to_userdata(ffi::lua_upvalueindex(1)) as *mut Runtime;
 
             // Get the raw pointer and turn it back into a Rust function pointer.
             let f_raw_ptr = state.to_userdata(ffi::lua_upvalueindex(2)) as *mut usize;
             let f: RuntimeFn = mem::transmute(f_raw_ptr);
 
             // Invoke the function.
-            f(runtime)
+            f(&mut *runtime)
         }
     }
 
+    /// Gets the runtime as a raw pointer.
+    fn as_ptr(&self) -> *mut Runtime {
+        self as *const Runtime as *mut Runtime
+    }
+
+    /// Gets the last error pushed on the Lua stack.
     fn get_last_error(&mut self) -> Option<Error> {
         if self.state.is_string(-1) {
             Some(Error::new(RoteError::Runtime, self.state.to_str(-1).unwrap()))

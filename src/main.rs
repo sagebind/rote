@@ -67,7 +67,7 @@ fn main() {
     println!("Build file: {}\r\n", path.to_str().unwrap());
 
     // Create a new script runtime.
-    let mut runtime = runtime::Runtime::new().unwrap();
+    let mut runtime = Box::new(runtime::Runtime::new().unwrap());
     if let Err(e) = runtime.load(&filename) {
         e.die();
     }

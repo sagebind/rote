@@ -34,16 +34,16 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.1.10"
+version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "lua"
 version = "0.0.8"
-source = "git+https://github.com/jcmoyer/rust-lua53#c021fcb26aed72981c565a908cb94d8e3a75a23c"
+source = "git+https://github.com/jcmoyer/rust-lua53#ea27f2cfe976a0ac7abe77fb9cb14168db0fc380"
 dependencies = [
  "bitflags 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "libc 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libc 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
