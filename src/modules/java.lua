@@ -2,6 +2,7 @@
 
 java = {}
 
+
 function java.binary(options)
     local options = rote.options(options, {
         dest = ".",
@@ -58,5 +59,6 @@ function java.jar(options)
 
     exec("jar " .. table.concat(jar_flags, " ") .. options.srcs)
 end
+
 
 return java

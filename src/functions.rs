@@ -4,6 +4,7 @@ use glob;
 use lua;
 use modules::{fetch, Module};
 use runtime::Runtime;
+use std::env;
 use term;
 
 
@@ -11,7 +12,7 @@ use term;
 ///
 /// # Lua arguments
 /// * `name: string`         - The name of the module to load.
-pub fn loader<'r>(runtime: &mut Runtime) -> i32 {
+pub fn loader(runtime: &mut Runtime) -> i32 {
     // Get the module name as the first argument.
     let name = runtime.state().check_string(1).to_string();
 
@@ -31,7 +32,7 @@ pub fn loader<'r>(runtime: &mut Runtime) -> i32 {
 }
 
 /// Native module loader callback.
-fn loader_native<'r>(runtime: &mut Runtime) -> i32 {
+fn loader_native(runtime: &mut Runtime) -> i32 {
     let name = runtime.state().check_string(1).to_string();
 
     if let Some(Module::Native(mtable)) = fetch(&name) {
@@ -56,7 +57,7 @@ fn loader_native<'r>(runtime: &mut Runtime) -> i32 {
 /// * `name: string`         - The name of the task.
 /// * `dependencies: table`  - A list of task names that the task depends on. (Optional)
 /// * `func: function`       - A function that should be called when the task is run.
-pub fn task<'r>(runtime: &mut Runtime) -> i32 {
+pub fn task(runtime: &mut Runtime) -> i32 {
     let mut arg_index = 1;
 
     // Get the task name as the first argument.
@@ -95,7 +96,7 @@ pub fn task<'r>(runtime: &mut Runtime) -> i32 {
 ///
 /// # Lua arguments
 /// * `name: string` - The name of the task to set as default.
-pub fn default<'r>(runtime: &mut Runtime) -> i32 {
+pub fn default(runtime: &mut Runtime) -> i32 {
     // Get the task name as the first argument.
     let name = runtime.state().check_string(1).to_string();
 
@@ -109,7 +110,7 @@ pub fn default<'r>(runtime: &mut Runtime) -> i32 {
 ///
 /// # Lua arguments
 /// * `str: string` - The string to print.
-pub fn print<'r>(runtime: &mut Runtime) -> i32 {
+pub fn print(runtime: &mut Runtime) -> i32 {
     let mut out = term::stdout().unwrap();
 
     if !runtime.stack.is_empty() {
@@ -129,7 +130,7 @@ pub fn print<'r>(runtime: &mut Runtime) -> i32 {
 ///
 /// # Lua arguments
 /// * `pattern: string` - The glob pattern to match.
-pub fn glob<'r>(runtime: &mut Runtime) -> i32 {
+pub fn glob(runtime: &mut Runtime) -> i32 {
     // Get the pattern as the first argument.
     let pattern = runtime.state().check_string(1).to_string();
 
@@ -155,4 +156,18 @@ pub fn glob<'r>(runtime: &mut Runtime) -> i32 {
     }
 
     1
+}
+
+/// Exports an environment variable.
+///
+/// # Lua arguments
+/// * `key: string` - The variable name.
+/// * `value: string` - The value to set.
+pub fn export(runtime: &mut Runtime) -> i32 {
+    let key = runtime.state().check_string(1).to_string();
+    let value = runtime.state().check_string(2).to_string();
+
+    env::set_var(key, value);
+
+    0
 }

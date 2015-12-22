@@ -2,6 +2,7 @@
 
 cpp = {}
 
+
 function cpp.binary(options)
     local options = rote.options(options, {
         out = "bin/a.out",
@@ -29,5 +30,6 @@ function cpp.binary(options)
 
     exec(linker .. " " .. linker_flags .. " -o " .. options.out .. " " .. table.concat(obj_files, " "))
 end
+
 
 return cpp

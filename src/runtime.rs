@@ -68,6 +68,7 @@ impl Runtime {
         runtime.register_fn("default", functions::default);
         runtime.register_fn("print", functions::print);
         runtime.register_fn("glob", functions::glob);
+        runtime.register_fn("export", functions::export);
 
         // Register the module loader.
         runtime.register_loader(functions::loader);

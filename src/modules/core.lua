@@ -4,12 +4,19 @@
 rote = {}
 
 local print_raw = print
+local export_raw = export
+
 
 -- Expands global and environment variables inside a given string.
 function rote.expand(str)
     return string.gsub(str, "$(%w+)", function (name)
         return os.getenv(name) or _G[name] or ""
     end)
+end
+
+-- Exports an environment variable.
+function rote.export(key, value)
+    return export_raw(key, rote.expand(value))
 end
 
 -- Escapes a string allowing it to be passed safely to a shell function.
@@ -44,8 +51,11 @@ function rote.options(given, defaults)
     return defaults
 end
 
+
 -- Define some global function aliases.
+export = rote.export
 exec = rote.execute
 print = rote.print
+
 
 return rote
