@@ -3,6 +3,7 @@
 use glob;
 use lua;
 use modules::{fetch, Module};
+use runner::Runner;
 use runtime::Runtime;
 use std::env;
 use term;
@@ -22,7 +23,7 @@ pub fn loader(runtime: &mut Runtime) -> i32 {
                 runtime.state().load_string(source);
             },
             Module::Native(_) => {
-                runtime.push_fn(loader_native);
+                runtime.push_fn(loader_native, None);
             },
         };
     } else {
@@ -39,7 +40,7 @@ fn loader_native(runtime: &mut Runtime) -> i32 {
         runtime.state().new_table();
 
         for &(name, func) in mtable.0 {
-            runtime.push_fn(func);
+            runtime.push_fn(func, None);
             runtime.state().set_field(-2, name);
         }
 
@@ -58,6 +59,8 @@ fn loader_native(runtime: &mut Runtime) -> i32 {
 /// * `dependencies: table`  - A list of task names that the task depends on. (Optional)
 /// * `func: function`       - A function that should be called when the task is run.
 pub fn task(runtime: &mut Runtime) -> i32 {
+    let runner = unsafe { &mut *(runtime.get_fn_data() as *mut Runner) };
+
     let mut arg_index = 1;
 
     // Get the task name as the first argument.
@@ -87,7 +90,7 @@ pub fn task(runtime: &mut Runtime) -> i32 {
     let func = runtime.state().reference(lua::REGISTRYINDEX);
 
     // Create the task.
-    runtime.create_task(name.to_string(), deps, func);
+    runner.create_task(name.to_string(), deps, func);
 
     0
 }
@@ -97,11 +100,13 @@ pub fn task(runtime: &mut Runtime) -> i32 {
 /// # Lua arguments
 /// * `name: string` - The name of the task to set as default.
 pub fn default(runtime: &mut Runtime) -> i32 {
+    let runner = unsafe { &mut *(runtime.get_fn_data() as *mut Runner) };
+
     // Get the task name as the first argument.
     let name = runtime.state().check_string(1).to_string();
 
     // Set the default task to the given name.
-    runtime.default_task = Some(name);
+    runner.default_task = Some(name);
 
     0
 }
@@ -111,10 +116,11 @@ pub fn default(runtime: &mut Runtime) -> i32 {
 /// # Lua arguments
 /// * `str: string` - The string to print.
 pub fn print(runtime: &mut Runtime) -> i32 {
+    let runner = unsafe { &mut *(runtime.get_fn_data() as *mut Runner) };
     let mut out = term::stdout().unwrap();
 
-    if !runtime.stack.is_empty() {
-        let cell = runtime.stack.front().unwrap().upgrade().unwrap();
+    if !runner.stack.is_empty() {
+        let cell = runner.stack.front().unwrap().upgrade().unwrap();
         out.fg(term::color::GREEN).unwrap();
         write!(out, "[{}]\t", cell.borrow().name).unwrap();
         out.reset().unwrap();

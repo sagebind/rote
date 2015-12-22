@@ -1,3 +1,5 @@
+#![feature(mutex_into_inner)]
+
 extern crate getopts;
 extern crate glob;
 extern crate lua;
@@ -12,6 +14,7 @@ use std::process;
 mod error;
 mod functions;
 mod modules;
+mod runner;
 mod runtime;
 
 
@@ -67,14 +70,14 @@ fn main() {
     println!("Build file: {}\r\n", path.to_str().unwrap());
 
     // Create a new script runtime.
-    let mut runtime = Box::new(runtime::Runtime::new().unwrap());
-    if let Err(e) = runtime.load(&filename) {
+    let mut runner = runner::Runner::new().unwrap();
+    if let Err(e) = runner.load(&filename) {
         e.die();
     }
 
     // List all tasks instead of running one.
     if opt_matches.opt_present("l") {
-        for task in runtime.tasks {
+        for task in runner.tasks {
             println!("{}", task.1.borrow().name);
         }
 
@@ -82,9 +85,9 @@ fn main() {
     }
 
     // Run the specified task.
-    if let Err(e) = runtime.run_task(&task_name, args) {
+    if let Err(e) = runner.run(&task_name, args) {
         e.die();
     }
 
-    runtime.close();
+    runner.close();
 }
