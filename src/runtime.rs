@@ -16,7 +16,7 @@ pub struct Runtime {
 }
 
 /// A function that can be bound to be callable inside the Lua runtime.
-pub type RuntimeFn = fn(&mut Runtime) -> i32;
+pub type RuntimeFn = fn(&mut Runtime, Option<usize>) -> i32;
 
 impl Runtime {
     /// Creates a new runtime instance.
@@ -132,12 +132,15 @@ impl Runtime {
             self.state.push_light_userdata(f as *mut usize);
 
             if let Some(data) = data {
+                self.state.push_number(1f64);
                 self.state.push_light_userdata(data as *mut usize);
+            } else {
+                self.state.push_number(0f64);
             }
         }
 
         // Push a wrapper function onto the stack, which delegates to the given function.
-        self.state.push_closure(Some(fn_wrapper), if data.is_some() { 3 } else { 2 });
+        self.state.push_closure(Some(fn_wrapper), if data.is_some() { 4 } else { 3 });
 
         // Wrapper function for invoking Rust functions from inside Lua.
         unsafe extern fn fn_wrapper(l: *mut ffi::lua_State) -> i32 {
@@ -149,13 +152,16 @@ impl Runtime {
             let f_raw_ptr = state.to_userdata(ffi::lua_upvalueindex(2)) as *mut usize;
             let f: RuntimeFn = mem::transmute(f_raw_ptr);
 
-            // Invoke the function.
-            f(&mut *runtime)
-        }
-    }
+            // Optionally get the closure data value.
+            let data = if state.to_number(ffi::lua_upvalueindex(3)) == 1f64 {
+                Some(state.to_userdata(ffi::lua_upvalueindex(4)) as usize)
+            } else {
+                None
+            };
 
-    pub fn get_fn_data(&mut self) -> *mut usize {
-        self.state.to_userdata(ffi::lua_upvalueindex(3)) as *mut usize
+            // Invoke the function.
+            f(&mut *runtime, data)
+        }
     }
 
     /// Gets the last error pushed on the Lua stack.
