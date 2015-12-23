@@ -1,15 +1,12 @@
 use error::{Error, RoteError};
 use glob;
-use lazysort::SortedBy;
 use lua;
 use runtime::Runtime;
 use std::cell::RefCell;
 use std::collections::{HashMap, LinkedList};
 use std::env;
 use std::rc::{Rc, Weak};
-use std::sync;
 use term;
-
 
 /// A single build task.
 pub struct Task {
@@ -22,10 +19,12 @@ pub struct Task {
     /// A list of task names that must be ran before this task.
     pub deps: Vec<String>,
 
-    /// A reference to this task's callback function.
-    pub func: lua::Reference,
+    /// A closure for invoking the task.
+    closure: Box<Fn(Vec<String>) -> Result<(), Error>>,
 }
 
+/// A task runner object that holds the state for defined tasks, dependencies, and the scripting
+/// runtime.
 pub struct Runner {
     /// A map of all defined tasks.
     pub tasks: HashMap<String, Rc<RefCell<Task>>>,
@@ -40,21 +39,25 @@ pub struct Runner {
     next_description: Option<String>,
 
     /// The scripting runtime.
-    runtime: sync::Mutex<Box<Runtime>>,
+    runtime: Rc<RefCell<Box<Runtime>>>,
 }
 
 impl Runner {
+    /// Creates a new runner instance.
+    ///
+    /// The instance is placed inside a box to ensure the runner has a constant location in memory
+    /// so that it can be referenced by native closures in the runtime.
     pub fn new() -> Result<Box<Runner>, Error> {
         let runner = Box::new(Runner {
             tasks: HashMap::new(),
             default_task: None,
             stack: LinkedList::new(),
             next_description: None,
-            runtime: sync::Mutex::new(try!(Runtime::new())),
+            runtime: Rc::new(RefCell::new(try!(Runtime::new()))),
         });
 
         {
-            let mut runtime = runner.runtime.lock().unwrap();
+            let mut runtime = runner.runtime.borrow_mut();
 
             // Register core functions.
             let ptr = &*runner as *const Runner as usize;
@@ -74,42 +77,52 @@ impl Runner {
 
     /// Creates a new task.
     pub fn create_task(&mut self, name: String, description: Option<String>, deps: Vec<String>, func: lua::Reference) {
+        let runtime = self.runtime.clone();
+
         // Create a task object.
         let task = Task {
             name: name,
             description: description,
             deps: deps,
-            func: func,
+            closure: Box::new(move |args: Vec<String>| -> Result<(), Error> {
+                // Get the function reference onto the Lua stack.
+                runtime.borrow_mut().state().raw_geti(lua::REGISTRYINDEX, func.value() as i64);
+
+                // Push the given task arguments onto the stack.
+                for string in &args {
+                    runtime.borrow_mut().state().push_string(string);
+                }
+
+                // Invoke the task function.
+                if runtime.borrow_mut().state().pcall(args.len() as i32, 0, 0).is_err() {
+                    return Err(runtime.borrow_mut().get_last_error().unwrap());
+                }
+
+                runtime.borrow_mut().state().pop(1);
+
+                Ok(())
+            })
         };
 
         // Add it to the master list of tasks.
         self.tasks.insert(task.name.clone(), Rc::new(RefCell::new(task)));
     }
 
+    /// Gets the default task to run, if any.
+    pub fn default_task(&self) -> Option<Rc<RefCell<Task>>> {
+        self.default_task
+            .as_ref()
+            .and_then(|name| self.tasks.get(name))
+            .map(|rc| rc.clone())
+        // ^ Look at that snazzy functional code.
+    }
+
+    /// Loads a build file script.
     pub fn load(&mut self, filename: &str) -> Result<(), Error> {
-        self.runtime.lock().unwrap().load(filename)
+        self.runtime.borrow_mut().load(filename)
     }
 
-    pub fn print_task_list(&self) {
-        let mut out = term::stdout().unwrap();
-
-        println!("Available tasks:");
-
-        for task in self.tasks.iter().sorted_by(|a, b| {
-            a.0.cmp(b.0)
-        }) {
-            out.fg(term::color::GREEN).unwrap();
-            write!(out, "  {:16}", task.0).unwrap();
-            out.reset().unwrap();
-
-            if let Some(ref description) = task.1.borrow().description {
-                write!(out, "{}", description).unwrap();
-            }
-
-            writeln!(out, "").unwrap();
-        }
-    }
-
+    /// Runs a task with a specified name.
     pub fn run(&mut self, name: &str, args: Vec<String>) -> Result<(), Error> {
         // Determine the name of the task to run.
         let task_name = if name == "default" {
@@ -132,34 +145,19 @@ impl Runner {
         // Set the active task.
         self.stack.push_front(Rc::downgrade(&task));
 
-        // Run all dependencies first.
+        // Run all dependencies first concurrently in individual threads. We will use a mutex
+        // around a finish count to alert the parent when all the dependencies have finished.
         for dep_name in &task.borrow().deps {
-            try!(self.run(&dep_name, Vec::new()));
+            try!(self.run(dep_name, Vec::new()));
         }
 
         // Call the task itself.
-        // Push the task function onto the Lua stack.
-        self.runtime.lock().unwrap().state().raw_geti(lua::REGISTRYINDEX, task.borrow().func.value() as i64);
-
-        // Push the given task arguments onto the stack.
-        for string in &args {
-            self.runtime.lock().unwrap().state().push_string(&string);
-        }
-
-        // Invoke the task function.
-        if self.runtime.lock().unwrap().state().pcall(args.len() as i32, 0, 0).is_err() {
-            return Err(self.runtime.lock().unwrap().get_last_error().unwrap());
-        }
-        self.runtime.lock().unwrap().state().pop(1);
+        try!((task.borrow().closure)(args));
 
         // Pop the task off the call stack.
         self.stack.pop_front();
 
         Ok(())
-    }
-
-    pub fn close(self) {
-        self.runtime.into_inner().unwrap().close();
     }
 }
 
@@ -184,9 +182,8 @@ fn task(runtime: &mut Runtime, data: Option<usize>) -> i32 {
         // Read all of the names in the table and add it to the deps vector.
         runtime.state().push_nil();
         while runtime.state().next(arg_index) {
-            runtime.state().push_value(-2);
-            let dep = runtime.state().to_str(-2).unwrap().to_string();
-            runtime.state().pop(1);
+            let dep = runtime.state().to_str(-1).unwrap().to_string();
+            runtime.state().pop(2);
 
             deps.push(dep);
         }
@@ -201,10 +198,7 @@ fn task(runtime: &mut Runtime, data: Option<usize>) -> i32 {
     let func = runtime.state().reference(lua::REGISTRYINDEX);
 
     // Create the task.
-    let desc = match &runner.next_description {
-        &Some(ref desc) => { Some(desc.clone()) },
-        &None => { None },
-    };
+    let desc = runner.next_description.as_ref().map(|desc| desc.clone());
     runner.next_description = None;
     runner.create_task(name.to_string(), desc, deps, func);
 

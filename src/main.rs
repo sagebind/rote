@@ -1,5 +1,3 @@
-#![feature(mutex_into_inner)]
-
 extern crate getopts;
 extern crate glob;
 extern crate lazysort;
@@ -7,6 +5,7 @@ extern crate lua;
 extern crate term;
 
 use getopts::Options;
+use lazysort::SortedBy;
 use std::env;
 use std::fs;
 use std::path;
@@ -77,7 +76,7 @@ fn main() {
 
     // List all tasks instead of running one.
     if opt_matches.opt_present("l") {
-        runner.print_task_list();
+        print_task_list(&runner);
         return;
     }
 
@@ -85,6 +84,29 @@ fn main() {
     if let Err(e) = runner.run(&task_name, args) {
         e.die();
     }
+}
 
-    runner.close();
+fn print_task_list(runner: &runner::Runner) {
+    let mut out = term::stdout().unwrap();
+
+    println!("Available tasks:");
+
+    for task in runner.tasks.iter().sorted_by(|a, b| {
+        a.0.cmp(b.0)
+    }) {
+        out.fg(term::color::GREEN).unwrap();
+        write!(out, "  {:16}", task.0).unwrap();
+        out.reset().unwrap();
+
+        if let Some(ref description) = task.1.borrow().description {
+            write!(out, "{}", description).unwrap();
+        }
+
+        writeln!(out, "").unwrap();
+    }
+
+    if let Some(ref default) = runner.default_task() {
+        println!("");
+        println!("Default task: {}", default.borrow().name);
+    }
 }

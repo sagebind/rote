@@ -118,11 +118,6 @@ impl Runtime {
         self.state.error();
     }
 
-    /// Closes the runtime.
-    pub fn close(self) {
-        self.state.close();
-    }
-
     /// Pushes a safe runtime function onto the stack.
     pub fn push_fn(&mut self, f: RuntimeFn, data: Option<usize>) {
         // First push a pointer to the runtime and a pointer to the given function so that we know
