@@ -8,6 +8,7 @@ readme = "README.md"
 [dependencies]
 getopts = "0.2"
 glob = "0.2"
+lazysort = "0.1.0"
 term = "0.2"
 
 [dependencies.lua]

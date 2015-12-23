@@ -1,8 +1,8 @@
 use error::Error;
 use error::RoteError;
-use functions;
 use lua;
 use lua::ffi;
+use modules::{fetch, Module};
 use std::mem;
 
 
@@ -37,7 +37,7 @@ impl Runtime {
         runtime.state.open_libs();
 
         // Register the module loader.
-        runtime.register_loader(functions::loader);
+        runtime.register_loader(loader);
 
         Ok(runtime)
     }
@@ -171,5 +171,48 @@ impl Runtime {
         } else {
             None
         }
+    }
+}
+
+/// A Lua module loader that loads built-in modules.
+///
+/// # Lua arguments
+/// * `name: string`         - The name of the module to load.
+fn loader(runtime: &mut Runtime, _: Option<usize>) -> i32 {
+    // Get the module name as the first argument.
+    let name = runtime.state().check_string(1).to_string();
+
+    if let Some(module) = fetch(&name) {
+        match module {
+            Module::Builtin(source) => {
+                runtime.state().load_string(source);
+            },
+            Module::Native(_) => {
+                runtime.push_fn(loader_native, None);
+            },
+        };
+    } else {
+        runtime.state().push_string(&format!("\n\tno builtin module '{}'", name));
+    }
+    1
+}
+
+/// Native module loader callback.
+fn loader_native(runtime: &mut Runtime, _: Option<usize>) -> i32 {
+    let name = runtime.state().check_string(1).to_string();
+
+    if let Some(Module::Native(mtable)) = fetch(&name) {
+        runtime.state().new_table();
+
+        for &(name, func) in mtable.0 {
+            runtime.push_fn(func, None);
+            runtime.state().set_field(-2, name);
+        }
+
+        runtime.state().set_global(&name);
+
+        1
+    } else {
+        0
     }
 }

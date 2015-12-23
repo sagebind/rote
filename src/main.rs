@@ -2,6 +2,7 @@
 
 extern crate getopts;
 extern crate glob;
+extern crate lazysort;
 extern crate lua;
 extern crate term;
 
@@ -12,7 +13,6 @@ use std::path;
 use std::process;
 
 mod error;
-mod functions;
 mod modules;
 mod runner;
 mod runtime;
@@ -20,7 +20,7 @@ mod runtime;
 
 /// Prints the program usage to the console.
 fn print_usage(options: Options) {
-    let brief = "Usage: rote [options] [task] [args]";
+    let brief = "Rote multilingual build tool\r\n\r\nUsage: rote [options] [task] [args]";
     print!("{}", options.usage(brief));
 }
 
@@ -77,10 +77,7 @@ fn main() {
 
     // List all tasks instead of running one.
     if opt_matches.opt_present("l") {
-        for task in runner.tasks {
-            println!("{}", task.1.borrow().name);
-        }
-
+        runner.print_task_list();
         return;
     }
 

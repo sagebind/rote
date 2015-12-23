@@ -2,21 +2,25 @@ require "cargo"
 default "debug"
 
 
+desc("Build a debug binary")
 task("debug", function()
     print "Building debug version..."
     cargo.build()
 end)
 
+desc("Build a release binary")
 task("release", function()
     cargo.build {
         release = true
     }
 end)
 
+desc("Clean the project directory")
 task("clean", function()
     cargo.clean()
 end)
 
+desc("Runs tests")
 task("test", function()
     for _, file in ipairs(glob("tests/*.lua")) do
         print("[" .. file .. "]")
