@@ -1,3 +1,4 @@
+extern crate filetime;
 extern crate getopts;
 extern crate glob;
 extern crate lazysort;
@@ -98,7 +99,7 @@ fn print_task_list(runner: &runner::Runner) {
         write!(out, "  {:16}", task.0).unwrap();
         out.reset().unwrap();
 
-        if let Some(ref description) = task.1.borrow().description {
+        if let Some(ref description) = task.1.description {
             write!(out, "{}", description).unwrap();
         }
 
@@ -107,6 +108,6 @@ fn print_task_list(runner: &runner::Runner) {
 
     if let Some(ref default) = runner.default_task() {
         println!("");
-        println!("Default task: {}", default.borrow().name);
+        println!("Default task: {}", default.name);
     }
 }
