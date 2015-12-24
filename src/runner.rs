@@ -34,7 +34,7 @@ pub struct Task {
     func: lua::Reference,
 
     /// The scripting runtime.
-    runtime: Rc<RefCell<Box<Runtime>>>,
+    runtime: Rc<RefCell<Runtime>>,
 }
 
 impl Task {
@@ -51,8 +51,6 @@ impl Task {
         if self.runtime.borrow_mut().state().pcall(args.len() as i32, 0, 0).is_err() {
             return Err(self.runtime.borrow_mut().get_last_error().unwrap());
         }
-
-        self.runtime.borrow_mut().state().pop(1);
 
         Ok(())
     }
@@ -74,7 +72,7 @@ pub struct Rule {
     func: lua::Reference,
 
     /// The scripting runtime.
-    runtime: Rc<RefCell<Box<Runtime>>>,
+    runtime: Rc<RefCell<Runtime>>,
 }
 
 impl Rule {
@@ -134,8 +132,6 @@ impl<'t> RuleTask<'t> {
             return Err(self.rule.runtime.borrow_mut().get_last_error().unwrap());
         }
 
-        self.rule.runtime.borrow_mut().state().pop(1);
-
         Ok(())
     }
 
@@ -166,7 +162,7 @@ pub struct Runner {
     next_description: Option<String>,
 
     /// The scripting runtime.
-    runtime: Rc<RefCell<Box<Runtime>>>,
+    runtime: Rc<RefCell<Runtime>>,
 }
 
 impl Runner {
@@ -181,8 +177,10 @@ impl Runner {
             default_task: None,
             stack: LinkedList::new(),
             next_description: None,
-            runtime: Rc::new(RefCell::new(try!(Runtime::new()))),
+            runtime: Rc::new(RefCell::new(Runtime::new())),
         });
+
+        runner.runtime.borrow_mut().init();
 
         {
             let mut runtime = runner.runtime.borrow_mut();

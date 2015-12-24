@@ -8,9 +8,6 @@ use std::mem;
 
 /// A Lua script runtime for parsing and executing build script functions.
 pub struct Runtime {
-    /// A raw pointer to the heap location of this runtime object.
-    ptr: *mut Runtime,
-
     /// A Lua interpreter state.
     state: lua::State,
 }
@@ -18,28 +15,28 @@ pub struct Runtime {
 /// A function that can be bound to be callable inside the Lua runtime.
 pub type RuntimeFn = fn(&mut Runtime, Option<usize>) -> i32;
 
+/// A runtime instance that wraps a Lua state with convenience methods.
+///
+/// The runtime instance should be allocated onto the heap before it is initialized. This allows
+/// the runtime object to be passed around as raw pointers in closure upvalues without address
+/// errors.
 impl Runtime {
     /// Creates a new runtime instance.
-    ///
-    /// The runtime instance is allocated onto the heap. This allows the runtime object to be passed
-    /// around as raw pointers in closure upvalues. The caller will own the box that owns the
-    /// runtime instance.
-    pub fn new() -> Result<Box<Runtime>, Error> {
-        let mut runtime = Box::new(Runtime {
-            ptr: 0 as *mut Runtime,
+    pub fn new() -> Runtime {
+        Runtime {
             state: lua::State::new(),
-        });
+        }
+    }
 
-        // Store a raw self pointer to this runtime object.
-        runtime.ptr = runtime.as_ptr();
-
+    /// Initializes the runtime environment.
+    ///
+    /// Please call this *after* you've put the runtime in a stable memory location. Thank you.
+    pub fn init(&mut self) {
         // Prepare the environment.
-        runtime.state.open_libs();
+        self.state.open_libs();
 
         // Register the module loader.
-        runtime.register_loader(loader);
-
-        Ok(runtime)
+        self.register_loader(loader);
     }
 
     /// Gets the runtime as a raw pointer.
@@ -123,7 +120,7 @@ impl Runtime {
         // First push a pointer to the runtime and a pointer to the given function so that we know
         // what function to delegate to and what runtime to pass.
         unsafe {
-            self.state.push_light_userdata(self.ptr);
+            self.state().push_light_userdata(self.as_ptr());
             self.state.push_light_userdata(f as *mut usize);
 
             if let Some(data) = data {
