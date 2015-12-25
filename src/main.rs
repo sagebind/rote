@@ -78,10 +78,15 @@ fn main() {
 
     // Get the file name of the Rotefile if given.
     let filename = opt_matches.opt_str("f").unwrap_or("Rotefile".to_string());
-    let path = fs::canonicalize(path::Path::new(&filename)).unwrap_or_else(|_| {
-        println!("error: the path {} is not a file or is not readable", filename);
-        process::exit(1);
-    });
+    let path = fs::canonicalize(path::Path::new(&filename))
+        .ok()
+        .and_then(|path_buf| path_buf.to_str()
+            .map(|path| path.to_string())
+        )
+        .unwrap_or_else(|| {
+            println!("error: the path {} is not a file or is not readable", filename);
+            process::exit(1);
+        });
 
     // If the directory flag is present, change directories first.
     if let Some(directory) = opt_matches.opt_str("C") {
@@ -101,11 +106,11 @@ fn main() {
         args.remove(0)
     };
 
-    println!("Build file: {}\r\n", path.to_str().unwrap());
+    println!("Build file: {}\r\n", &path);
 
     // Create a new script runtime.
     let mut runner = runner::Runner::new().unwrap();
-    if let Err(e) = runner.load(&filename) {
+    if let Err(e) = runner.load(&path) {
         e.die();
     }
 
