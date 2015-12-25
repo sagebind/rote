@@ -7,19 +7,11 @@ use std::cell::RefCell;
 use std::collections::{HashMap, LinkedList};
 use std::env;
 use std::fs;
-use std::rc::{Rc, Weak};
+use std::rc::Rc;
 use term;
 
 
-/// A generic trait for both normal tasks and rule-based tasks.
-pub trait Target {
-    fn is_satisfied(&self) -> bool {
-        false
-    }
-}
-
-
-/// A single build task.
+/// A single named build task.
 pub struct Task {
     /// The name of the task.
     pub name: String,
@@ -27,29 +19,31 @@ pub struct Task {
     /// The task description.
     pub description: Option<String>,
 
-    /// A list of targets that must be ran before this task.
+    /// A list of tasks that must be ran before this task.
     pub deps: Vec<String>,
 
     /// A reference to the Lua callback.
     func: lua::Reference,
 
-    /// The scripting runtime.
-    runtime: Rc<RefCell<Runtime>>,
+    /// The runner the rule belongs to.
+    runner: *mut Runner,
 }
 
 impl Task {
     pub fn run(&self, args: Vec<String>) -> Result<(), Error> {
+        let runner = unsafe { &*self.runner };
+
         // Get the function reference onto the Lua stack.
-        self.runtime.borrow_mut().state().raw_geti(lua::REGISTRYINDEX, self.func.value() as i64);
+        runner.runtime.borrow_mut().state().raw_geti(lua::REGISTRYINDEX, self.func.value() as i64);
 
         // Push the given task arguments onto the stack.
         for string in &args {
-            self.runtime.borrow_mut().state().push_string(string);
+            runner.runtime.borrow_mut().state().push_string(string);
         }
 
         // Invoke the task function.
-        if self.runtime.borrow_mut().state().pcall(args.len() as i32, 0, 0).is_err() {
-            return Err(self.runtime.borrow_mut().get_last_error().unwrap());
+        if runner.runtime.borrow_mut().state().pcall(args.len() as i32, 0, 0).is_err() {
+            return Err(runner.runtime.borrow_mut().get_last_error().unwrap());
         }
 
         Ok(())
@@ -65,78 +59,74 @@ pub struct Rule {
     /// The rule description.
     pub description: Option<String>,
 
-    /// A list of targets that must be ran before this task.
+    /// A list of tasks that must be ran before this task.
     pub deps: Vec<String>,
 
     /// A reference to the Lua callback.
-    func: lua::Reference,
+    func: Option<lua::Reference>,
 
-    /// The scripting runtime.
-    runtime: Rc<RefCell<Runtime>>,
+    /// The runner the rule belongs to.
+    runner: *mut Runner,
 }
 
 impl Rule {
     pub fn matches(&self, file_name: &str) -> bool {
-        if self.pattern.contains("%") {
+        if let Some(index) = self.pattern.find("%") {
+            let (prefix, suffix) = self.pattern.split_at(index);
+            let suffix = &suffix[1..];
+
+            file_name.starts_with(prefix) && file_name.ends_with(suffix)
+        } else {
+            file_name.ends_with(&self.pattern)
+        }
+    }
+
+    pub fn is_satisfied(&self, file_name: &str) -> bool {
+        let runner = unsafe { &*self.runner };
+
+        if let Some(age) = Self::get_age(file_name) {
+            for dependency in &self.deps {
+                if let Some(dep_age) = runner.match_rule(dependency).and(Self::get_age(dependency)) {
+                    if dep_age > age {
+                        return false;
+                    }
+                }
+            }
+
             true
         } else {
-            file_name.contains(&self.pattern)
+            false
         }
-    }
-
-    /// Creates a rule task based on this rule template for a given file.
-    pub fn create_for<'t>(&'t self, file_name: &str) -> RuleTask<'t> {
-        RuleTask {
-            file_name: file_name.to_string(),
-            rule: &self,
-        }
-    }
-}
-
-
-/// A specific application of a rule, based on a rule as a template.
-pub struct RuleTask<'t> {
-    /// The specific file name the rule is applied to.
-    pub file_name: String,
-
-    /// The rule the task is based on.
-    rule: &'t Rule,
-}
-
-impl<'t> RuleTask<'t> {
-    pub fn is_satisfied(&self) -> bool {
-        self.get_age()
-            .map(|mtime| {
-                for dependency in &self.rule.deps {
-                }
-
-                true
-            })
-            .unwrap_or(false)
     }
 
     /// Runs the rule with a specified matching file name.
-    pub fn run(&self) -> Result<(), Error> {
-        if self.is_satisfied() {
+    pub fn run(&self, file_name: &str) -> Result<(), Error> {
+        if self.is_satisfied(file_name) {
             return Ok(());
         }
 
+        if self.func.is_none() {
+            return Ok(());
+        }
+
+        let runner = unsafe { &*self.runner };
+
         // Get the function reference onto the Lua stack.
-        self.rule.runtime.borrow_mut().state().raw_geti(lua::REGISTRYINDEX, self.rule.func.value() as i64);
+        runner.runtime.borrow_mut().state().raw_geti(lua::REGISTRYINDEX, self.func.unwrap().value() as i64);
 
         // Pass the file name in as the only argument.
-        self.rule.runtime.borrow_mut().state().push_string(&self.file_name);
+        runner.runtime.borrow_mut().state().push_string(file_name);
 
         // Invoke the task function.
-        if self.rule.runtime.borrow_mut().state().pcall(1, 0, 0).is_err() {
-            return Err(self.rule.runtime.borrow_mut().get_last_error().unwrap());
+        if runner.runtime.borrow_mut().state().pcall(1, 0, 0).is_err() {
+            return Err(runner.runtime.borrow_mut().get_last_error().unwrap());
         }
 
         Ok(())
     }
 
-    fn get_age(&self) -> Option<FileTime> {
-        fs::metadata(&self.file_name)
+    fn get_age(file_name: &str) -> Option<FileTime> {
+        fs::metadata(file_name)
             .map(|metadata| FileTime::from_last_modification_time(&metadata))
             .ok()
     }
@@ -156,13 +146,13 @@ pub struct Runner {
     default_task: Option<String>,
 
     /// Task execution stack.
-    stack: LinkedList<Weak<Task>>,
+    stack: LinkedList<String>,
 
     /// The set description for the next defined task.
     next_description: Option<String>,
 
     /// The scripting runtime.
-    runtime: Rc<RefCell<Runtime>>,
+    runtime: RefCell<Runtime>,
 }
 
 impl Runner {
@@ -177,27 +167,23 @@ impl Runner {
             default_task: None,
             stack: LinkedList::new(),
             next_description: None,
-            runtime: Rc::new(RefCell::new(Runtime::new())),
+            runtime: RefCell::new(Runtime::new()),
         });
 
         runner.runtime.borrow_mut().init();
 
-        {
-            let mut runtime = runner.runtime.borrow_mut();
+        // Register core functions.
+        let ptr = &*runner as *const Runner as usize;
+        runner.runtime.borrow_mut().register_fn("task", task, Some(ptr));
+        runner.runtime.borrow_mut().register_fn("rule", rule, Some(ptr));
+        runner.runtime.borrow_mut().register_fn("desc", desc, Some(ptr));
+        runner.runtime.borrow_mut().register_fn("default", default, Some(ptr));
+        runner.runtime.borrow_mut().register_fn("print", print, Some(ptr));
+        runner.runtime.borrow_mut().register_fn("glob", glob, None);
+        runner.runtime.borrow_mut().register_fn("export", export, None);
 
-            // Register core functions.
-            let ptr = &*runner as *const Runner as usize;
-            runtime.register_fn("task", task, Some(ptr));
-            runtime.register_fn("rule", rule, Some(ptr));
-            runtime.register_fn("desc", desc, Some(ptr));
-            runtime.register_fn("default", default, Some(ptr));
-            runtime.register_fn("print", print, Some(ptr));
-            runtime.register_fn("glob", glob, None);
-            runtime.register_fn("export", export, None);
-
-            // Load the core Lua module.
-            try!(runtime.eval("require 'core'"));
-        }
+        // Load the core Lua module.
+        try!(runner.runtime.borrow_mut().eval("require 'core'"));
 
         Ok(runner)
     }
@@ -209,11 +195,24 @@ impl Runner {
             description: description,
             deps: deps,
             func: func,
-            runtime: self.runtime.clone(),
+            runner: self,
         };
 
         // Add it to the master list of tasks.
         self.tasks.insert(task.name.clone(), Rc::new(task));
+    }
+
+    /// Creates a new rule.
+    pub fn create_rule(&mut self, pattern: String, description: Option<String>, deps: Vec<String>, func: Option<lua::Reference>) {
+        let rule = Rule {
+            pattern: pattern,
+            description: description,
+            deps: deps,
+            func: func,
+            runner: self,
+        };
+
+        self.rules.push(Rc::new(rule));
     }
 
     /// Gets the default task to run, if any.
@@ -225,26 +224,18 @@ impl Runner {
         // ^ Look at that snazzy functional code.
     }
 
-    /// Gets a task by name.
+    /// Gets a task or a matching file rule by name.
     pub fn get_task(&self, name: &str) -> Option<Rc<Task>> {
-        self.tasks.get(name).map(|rc| rc.clone())
-    }
-
-    /// Creates a new rule.
-    pub fn create_rule(&mut self, pattern: String, description: Option<String>, deps: Vec<String>, func: lua::Reference) {
-        let rule = Rule {
-            pattern: pattern,
-            description: description,
-            deps: deps,
-            func: func,
-            runtime: self.runtime.clone(),
-        };
-
-        self.rules.push(Rc::new(rule));
+        self.tasks.get(name)
+            .map(|rc| rc.clone())
     }
 
     /// Gets a rule for a given file name, if any defined rules match.
-    pub fn rule_for(&self, file_name: &str) -> Option<Rc<Rule>> {
+    pub fn match_rule(&self, file_name: &str) -> Option<Rc<Rule>> {
+        if self.tasks.contains_key(file_name) {
+            return None;
+        }
+
         for rule in &self.rules {
             if rule.matches(file_name) {
                 return Some(rule.clone());
@@ -259,45 +250,53 @@ impl Runner {
         self.runtime.borrow_mut().load(filename)
     }
 
+    fn resolve_dependencies(&mut self, dependencies: &Vec<String>) -> Result<(), Error> {
+        for dependency in dependencies {
+            try!(self.run(dependency, Vec::new()));
+        }
+
+        Ok(())
+    }
+
     /// Runs a task with a specified name.
     pub fn run(&mut self, name: &str, args: Vec<String>) -> Result<(), Error> {
-        // Determine the name of the task to run.
-        let task_name = if name == "default" {
-            if let Some(ref default_name) = self.default_task {
-                default_name.clone()
+        // If the defualt task is requested, try and run it.
+        if name == "default" {
+            if let Some(task) = self.default_task() {
+                self.stack.push_front(task.name.clone());
+
+                try!(self.resolve_dependencies(&task.deps));
+
+                try!(task.run(args));
             } else {
                 return Err(Error::new(RoteError::TaskNotFound, "no default task defined"));
             }
-        } else {
-            name.to_string()
-        };
+        }
 
-        // Get the task object from the given name.
-        let task = if let Some(task) = self.tasks.get(&task_name) {
-            task.clone()
-        } else {
-            return Err(Error::new(RoteError::TaskNotFound, &format!("no such task \"{}\"", name)));
-        };
+        // If the name is a task, run it first.
+        else if let Some(task) = self.get_task(name) {
+            self.stack.push_front(task.name.clone());
 
-        // Set the active task.
-        self.stack.push_front(Rc::downgrade(&task));
+            try!(self.resolve_dependencies(&task.deps));
 
-        // Run all dependencies first concurrently in individual threads. We will use a mutex
-        // around a finish count to alert the parent when all the dependencies have finished.
-        for dependency in &task.deps {
-            // If there is a task named by the dependency, run it.
-            if let Some(task) = self.get_task(dependency) {
-                try!(task.run(Vec::new()));
-            }
+            try!(task.run(args));
+        }
 
-            // No task for the name, so check if there is a matching rule.
-            else if let Some(rule) = self.rule_for(dependency) {
-                try!(rule.create_for(dependency).run());
+        // If the name is not a task, match it against a rule instead.
+        else if let Some(rule) = self.match_rule(name) {
+            if !rule.is_satisfied(name) {
+                self.stack.push_front(name.to_string());
+
+                try!(self.resolve_dependencies(&rule.deps));
+
+                try!(rule.run(name));
             }
         }
 
-        // Call the task itself.
-        try!(task.run(args));
+        // The name matches nothing, so return an error.
+        else {
+            return Err(Error::new(RoteError::TaskNotFound, &format!("no such task \"{}\"", name)));
+        }
 
         // Pop the task off the call stack.
         self.stack.pop_front();
@@ -355,7 +354,7 @@ fn task(runtime: &mut Runtime, data: Option<usize>) -> i32 {
 /// # Lua arguments
 /// * `pattern: string`      - The name of the task.
 /// * `dependencies: table`  - A list of task names that the rule depends on. (Optional)
-/// * `func: function`       - A function that should be called when the rule is run.
+/// * `func: function`       - A function that should be called when the rule is run. (Optional)
 fn rule(runtime: &mut Runtime, data: Option<usize>) -> i32 {
     let runner = unsafe { &mut *(data.unwrap() as *mut Runner) };
 
@@ -380,10 +379,14 @@ fn rule(runtime: &mut Runtime, data: Option<usize>) -> i32 {
     }
 
     // Third argument is the task function.
-    runtime.state().check_type(arg_index, lua::Type::Function);
-
-    // Get a portable reference to the task function.
-    let func = runtime.state().reference(lua::REGISTRYINDEX);
+    let func = runtime.state().type_of(arg_index).and_then(|t| {
+        if t == lua::Type::Function {
+            // Get a portable reference to the task function.
+            Some(runtime.state().reference(lua::REGISTRYINDEX))
+        } else {
+            None
+        }
+    });
 
     // Create the rule.
     let desc = runner.next_description.as_ref().map(|desc| desc.clone());
@@ -428,9 +431,9 @@ fn print(runtime: &mut Runtime, data: Option<usize>) -> i32 {
     let mut out = term::stdout().unwrap();
 
     if !runner.stack.is_empty() {
-        let task = runner.stack.front().unwrap().upgrade().unwrap();
+        let name = runner.stack.front().unwrap();
         out.fg(term::color::GREEN).unwrap();
-        write!(out, "[{}]\t", task.name).unwrap();
+        write!(out, "{:11} ", format!("[{}]", name)).unwrap();
         out.reset().unwrap();
     }
 

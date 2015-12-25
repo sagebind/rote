@@ -24,6 +24,31 @@ fn print_usage(options: Options) {
     print!("{}", options.usage(brief));
 }
 
+fn print_task_list(runner: &runner::Runner) {
+    let mut out = term::stdout().unwrap();
+
+    println!("Available tasks:");
+
+    for task in runner.tasks.iter().sorted_by(|a, b| {
+        a.0.cmp(b.0)
+    }) {
+        out.fg(term::color::GREEN).unwrap();
+        write!(out, "  {:16}", task.0).unwrap();
+        out.reset().unwrap();
+
+        if let Some(ref description) = task.1.description {
+            write!(out, "{}", description).unwrap();
+        }
+
+        writeln!(out, "").unwrap();
+    }
+
+    if let Some(ref default) = runner.default_task() {
+        println!("");
+        println!("Default task: {}", default.name);
+    }
+}
+
 /// Parses command-line options and runs retest.
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -31,10 +56,11 @@ fn main() {
     // Parse command-line flags.
     let mut options = Options::new();
     options.optflag("d", "dry-run", "Don't actually perform any action.");
-    options.optopt("f",  "file",    "Specify a Rotefile to read.", "FILE");
-    options.optflag("h", "help",    "Print this help menu and exit.");
-    options.optflag("l", "list",    "List available tasks.");
+    options.optflag("h", "help", "Print this help menu and exit.");
+    options.optflag("l", "list", "List available tasks.");
     options.optflag("v", "version", "Print the program version and exit.");
+    options.optopt("C", "directory", "Change to DIRECTORY before running tasks.", "DIRECTORY");
+    options.optopt("f", "file", "Read FILE as the Rotefile.", "FILE");
 
     let opt_matches = match options.parse(&args[1..]) {
         Ok(matches) => { matches }
@@ -56,6 +82,14 @@ fn main() {
         println!("error: the path {} is not a file or is not readable", filename);
         process::exit(1);
     });
+
+    // If the directory flag is present, change directories first.
+    if let Some(directory) = opt_matches.opt_str("C") {
+        if env::set_current_dir(&directory).is_err() {
+            println!("error: failed to change directory to '{}'", &directory);
+            process::exit(1);
+        }
+    }
 
     // Get all of the task arguments.
     let mut args = opt_matches.free.clone();
@@ -84,30 +118,5 @@ fn main() {
     // Run the specified task.
     if let Err(e) = runner.run(&task_name, args) {
         e.die();
-    }
-}
-
-fn print_task_list(runner: &runner::Runner) {
-    let mut out = term::stdout().unwrap();
-
-    println!("Available tasks:");
-
-    for task in runner.tasks.iter().sorted_by(|a, b| {
-        a.0.cmp(b.0)
-    }) {
-        out.fg(term::color::GREEN).unwrap();
-        write!(out, "  {:16}", task.0).unwrap();
-        out.reset().unwrap();
-
-        if let Some(ref description) = task.1.description {
-            write!(out, "{}", description).unwrap();
-        }
-
-        writeln!(out, "").unwrap();
-    }
-
-    if let Some(ref default) = runner.default_task() {
-        println!("");
-        println!("Default task: {}", default.name);
     }
 }
