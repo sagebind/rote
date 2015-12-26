@@ -22,6 +22,9 @@ pub struct Task {
     /// A list of tasks that must be ran before this task.
     pub deps: Vec<String>,
 
+    /// Indicates if the task has been run.
+    satisfied: bool,
+
     /// A reference to the Lua callback.
     func: lua::Reference,
 
@@ -30,7 +33,11 @@ pub struct Task {
 }
 
 impl Task {
-    pub fn run(&self, args: Vec<String>) -> Result<(), Error> {
+    pub fn is_satisfied(&self) -> bool {
+        self.satisfied
+    }
+
+    pub fn run(&mut self, args: Vec<String>) -> Result<(), Error> {
         let runner = unsafe { &*self.runner };
 
         // Get the function reference onto the Lua stack.
@@ -137,7 +144,7 @@ impl Rule {
 /// runtime.
 pub struct Runner {
     /// A map of all defined tasks.
-    pub tasks: HashMap<String, Rc<Task>>,
+    pub tasks: HashMap<String, Rc<RefCell<Task>>>,
 
     /// A vector of all defined file rules.
     pub rules: Vec<Rc<Rule>>,
@@ -194,12 +201,13 @@ impl Runner {
             name: name,
             description: description,
             deps: deps,
+            satisfied: false,
             func: func,
             runner: self,
         };
 
         // Add it to the master list of tasks.
-        self.tasks.insert(task.name.clone(), Rc::new(task));
+        self.tasks.insert(task.name.clone(), Rc::new(RefCell::new(task)));
     }
 
     /// Creates a new rule.
@@ -216,7 +224,7 @@ impl Runner {
     }
 
     /// Gets the default task to run, if any.
-    pub fn default_task(&self) -> Option<Rc<Task>> {
+    pub fn default_task(&self) -> Option<Rc<RefCell<Task>>> {
         self.default_task
             .as_ref()
             .and_then(|name| self.tasks.get(name))
@@ -225,7 +233,7 @@ impl Runner {
     }
 
     /// Gets a task or a matching file rule by name.
-    pub fn get_task(&self, name: &str) -> Option<Rc<Task>> {
+    pub fn get_task(&self, name: &str) -> Option<Rc<RefCell<Task>>> {
         self.tasks.get(name)
             .map(|rc| rc.clone())
     }
@@ -263,11 +271,11 @@ impl Runner {
         // If the defualt task is requested, try and run it.
         if name == "default" {
             if let Some(task) = self.default_task() {
-                self.stack.push_front(task.name.clone());
+                self.stack.push_front(task.borrow().name.clone());
 
-                try!(self.resolve_dependencies(&task.deps));
+                try!(self.resolve_dependencies(&task.borrow().deps));
 
-                try!(task.run(args));
+                try!(task.borrow_mut().run(args));
             } else {
                 return Err(Error::new(RoteError::TaskNotFound, "no default task defined"));
             }
@@ -275,11 +283,13 @@ impl Runner {
 
         // If the name is a task, run it first.
         else if let Some(task) = self.get_task(name) {
-            self.stack.push_front(task.name.clone());
+            if !task.borrow().is_satisfied() {
+                self.stack.push_front(task.borrow().name.clone());
 
-            try!(self.resolve_dependencies(&task.deps));
+                try!(self.resolve_dependencies(&task.borrow().deps));
 
-            try!(task.run(args));
+                try!(task.borrow_mut().run(args));
+            }
         }
 
         // If the name is not a task, match it against a rule instead.
