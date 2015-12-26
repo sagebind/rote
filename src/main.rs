@@ -3,6 +3,7 @@ extern crate getopts;
 extern crate glob;
 extern crate lazysort;
 extern crate lua;
+extern crate tar;
 extern crate term;
 
 use getopts::Options;
