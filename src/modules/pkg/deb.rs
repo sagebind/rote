@@ -16,7 +16,7 @@ impl ToString for Arch {
     fn to_string(&self) -> String {
         match *self {
             Arch::X86 => "i386",
-            Arch::X64 => "x86_64",
+            Arch::X64 => "amd64",
             Arch::All => "all",
         }.to_string()
     }
