@@ -56,12 +56,12 @@ fn main() {
 
     // Parse command-line flags.
     let mut options = Options::new();
+    options.optopt("C", "directory", "Change to DIRECTORY before running tasks.", "DIRECTORY");
     options.optflag("d", "dry-run", "Don't actually perform any action.");
+    options.optopt("f", "file", "Read FILE as the Rotefile.", "FILE");
     options.optflag("h", "help", "Print this help menu and exit.");
     options.optflag("l", "list", "List available tasks.");
     options.optflag("v", "version", "Print the program version and exit.");
-    options.optopt("C", "directory", "Change to DIRECTORY before running tasks.", "DIRECTORY");
-    options.optopt("f", "file", "Read FILE as the Rotefile.", "FILE");
 
     let opt_matches = match options.parse(&args[1..]) {
         Ok(matches) => { matches }
@@ -110,7 +110,7 @@ fn main() {
     println!("Build file: {}\r\n", &path);
 
     // Create a new script runtime.
-    let mut runner = runner::Runner::new().unwrap();
+    let mut runner = runner::Runner::new(opt_matches.opt_present("d")).unwrap();
     if let Err(e) = runner.load(&path) {
         e.die();
     }

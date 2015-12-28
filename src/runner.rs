@@ -97,6 +97,8 @@ impl Rule {
                     if dep_age > age {
                         return false;
                     }
+                } else {
+                    return false;
                 }
             }
 
@@ -158,6 +160,9 @@ pub struct Runner {
     /// The set description for the next defined task.
     next_description: Option<String>,
 
+    /// Indicates if actually running tasks should be skipped.
+    dry_run: bool,
+
     /// The scripting runtime.
     runtime: RefCell<Runtime>,
 }
@@ -167,13 +172,14 @@ impl Runner {
     ///
     /// The instance is placed inside a box to ensure the runner has a constant location in memory
     /// so that it can be referenced by native closures in the runtime.
-    pub fn new() -> Result<Box<Runner>, Error> {
+    pub fn new(dry_run: bool) -> Result<Box<Runner>, Error> {
         let runner = Box::new(Runner {
             tasks: HashMap::new(),
             rules: Vec::new(),
             default_task: None,
             stack: LinkedList::new(),
             next_description: None,
+            dry_run: dry_run,
             runtime: RefCell::new(Runtime::new()),
         });
 
@@ -258,58 +264,68 @@ impl Runner {
         self.runtime.borrow_mut().load(filename)
     }
 
-    fn resolve_dependencies(&mut self, dependencies: &Vec<String>) -> Result<(), Error> {
-        for dependency in dependencies {
-            try!(self.run(dependency, Vec::new()));
-        }
-
-        Ok(())
-    }
-
     /// Runs a task with a specified name.
     pub fn run(&mut self, name: &str, args: Vec<String>) -> Result<(), Error> {
-        // If the defualt task is requested, try and run it.
-        if name == "default" {
-            if let Some(task) = self.default_task() {
-                self.stack.push_front(task.borrow().name.clone());
-
-                try!(self.resolve_dependencies(&task.borrow().deps));
-
-                try!(task.borrow_mut().run(args));
+        // If the default task is requested, fetch it.
+        let name = if name == "default" {
+            if let Some(ref task) = self.default_task {
+                task.clone()
             } else {
                 return Err(Error::new(RoteError::TaskNotFound, "no default task defined"));
             }
-        }
+        } else {
+            name.to_string()
+        };
+
+        // Push the task onto the call stack.
+        self.stack.push_front(name.clone());
 
         // If the name is a task, run it first.
-        else if let Some(task) = self.get_task(name) {
-            if !task.borrow().is_satisfied() {
-                self.stack.push_front(task.borrow().name.clone());
-
+        if let Some(task) = self.get_task(&name) {
+            let satisfied = task.borrow().is_satisfied();
+            if !satisfied {
                 try!(self.resolve_dependencies(&task.borrow().deps));
 
-                try!(task.borrow_mut().run(args));
+                if !self.dry_run {
+                    try!(task.borrow_mut().run(args));
+                } else {
+                    println!("Would run task \"{}\".", &name);
+                }
+            } else {
+                println!("Nothing to be done for task \"{}\".", &name);
             }
         }
 
         // If the name is not a task, match it against a rule instead.
-        else if let Some(rule) = self.match_rule(name) {
-            if !rule.is_satisfied(name) {
-                self.stack.push_front(name.to_string());
-
+        else if let Some(rule) = self.match_rule(&name) {
+            if !rule.is_satisfied(&name) {
                 try!(self.resolve_dependencies(&rule.deps));
 
-                try!(rule.run(name));
+                if !self.dry_run {
+                    try!(rule.run(&name));
+                } else {
+                    println!("Would run rule \"{}\" for file \"{}\".", &rule.pattern, &name);
+                }
+            } else {
+                println!("Nothing to be done for file \"{}\".", &name);
             }
         }
 
         // The name matches nothing, so return an error.
         else {
-            return Err(Error::new(RoteError::TaskNotFound, &format!("no such task \"{}\"", name)));
+            return Err(Error::new(RoteError::TaskNotFound, &format!("no task or rule found for \"{}\"", name)));
         }
 
         // Pop the task off the call stack.
         self.stack.pop_front();
+
+        Ok(())
+    }
+
+    fn resolve_dependencies(&mut self, dependencies: &Vec<String>) -> Result<(), Error> {
+        for dependency in dependencies {
+            try!(self.run(dependency, Vec::new()));
+        }
 
         Ok(())
     }
@@ -438,17 +454,19 @@ fn default(runtime: &mut Runtime, data: Option<usize>) -> i32 {
 /// * `str: string` - The string to print.
 fn print(runtime: &mut Runtime, data: Option<usize>) -> i32 {
     let runner = unsafe { &mut *(data.unwrap() as *mut Runner) };
+    let string = runtime.state().check_string(1).to_string();
     let mut out = term::stdout().unwrap();
 
-    if !runner.stack.is_empty() {
-        let name = runner.stack.front().unwrap();
-        out.fg(term::color::GREEN).unwrap();
-        write!(out, "{:11} ", format!("[{}]", name)).unwrap();
-        out.reset().unwrap();
-    }
+    for line in string.lines() {
+        if !runner.stack.is_empty() {
+            let name = runner.stack.front().unwrap();
+            out.fg(term::color::GREEN).unwrap();
+            write!(out, "{:9} ", format!("[{}]", name)).unwrap();
+            out.reset().unwrap();
+        }
 
-    let string = runtime.state().check_string(1).to_string();
-    writeln!(out, "{}", &string).unwrap();
+        writeln!(out, "{}", line).unwrap();
+    }
 
     0
 }
