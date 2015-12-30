@@ -40,15 +40,55 @@ function rote.print(str)
     print_raw(rote.expand(str))
 end
 
+function rote.ask(str)
+    io.write(str .. " ")
+    return io.read("l")
+end
+
+function rote.ask_number(str)
+    io.write(str .. " ")
+    return io.read("n")
+end
+
 -- Parses an input table of options and merges it with a table of default values.
 function rote.options(given, defaults)
-    if given ~= nil then
-        for k,v in pairs(given) do
-            defaults[k] = v
-        end
+    if given == nil then
+        return defaults
     end
 
-    return defaults
+    setmetatable(given, {
+        __index = defaults
+    })
+
+    return given
+end
+
+-- Returns an iterator that iterates over each line in a string.
+function string.lines(str)
+    local remaining = str
+    local next = ""
+    local empty = false
+
+    local function capture(line)
+        next = line
+        return ""
+    end
+
+    return function()
+        if empty then
+            return nil
+        end
+
+        next = nil
+        remaining = remaining:gsub("(.-)\r?\n", capture, 1)
+
+        if not next then
+            empty = true
+            next = remaining
+        end
+
+        return next
+    end
 end
 
 
