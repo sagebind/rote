@@ -90,7 +90,7 @@ fn mkdir(runtime: &mut Runtime, _: Option<usize>) -> i32 {
     let path = runtime.state().check_string(1).to_string();
 
     if fs::create_dir(&path).is_err() {
-        runtime.throw_error(&format!("file \"{}\" exists", path));
+        runtime.throw_error(&format!("fiailed to create directory \"{}\"", path));
     }
 
     0
@@ -137,7 +137,7 @@ fn remove(runtime: &mut Runtime, _: Option<usize>) -> i32 {
 
     if let Ok(metadata) = fs::metadata(&path) {
         if metadata.file_type().is_dir() {
-            if fs::remove_dir(path).is_err() {
+            if fs::remove_dir_all(path).is_err() {
                 runtime.throw_error("failed to remove directory");
             }
         } else {
