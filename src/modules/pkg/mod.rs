@@ -48,35 +48,48 @@ fn deb(runtime: &mut Runtime, _: Option<usize>) -> i32 {
 
     runtime.state().push_nil();
     while runtime.state().next(1) {
-        match runtime.state().to_str(-2).unwrap() {
-            "file" => {
-                file = Some(runtime.state().check_string(-2).to_string());
+        match runtime.state().check_string(-2) {
+            "output" => {
+                file = Some(runtime.state().check_string(-1).to_string());
             }
             "name" => {
-                builder.name(runtime.state().check_string(-2));
+                builder.name(runtime.state().check_string(-1));
             }
             "section" => {
-                builder.section(runtime.state().check_string(-2));
+                builder.section(runtime.state().check_string(-1));
+            }
+            "depends" => {
+                runtime.state().push_nil();
+                while runtime.state().next(3) {
+                    let package = runtime.state().check_string(-2).to_string();
+                    let version = runtime.state().check_string(-1).to_string();
+
+                    builder.add_depends((&package, &version));
+                    runtime.state().pop(1);
+                }
             }
             "description" => {
-                builder.short_desc(runtime.state().check_string(-2));
+                builder.short_desc(runtime.state().check_string(-1));
+            }
+            "long_description" => {
+                builder.long_desc(runtime.state().check_string(-1));
             }
             "size" => {
-                builder.size(runtime.state().check_integer(-2) as u64);
+                builder.size(runtime.state().check_integer(-1) as u64);
             }
             "version" => {
-                builder.version(runtime.state().check_string(-2));
+                builder.version(runtime.state().check_string(-1));
             }
             "maintainer" => {
-                builder.maintainer(runtime.state().check_string(-2));
+                builder.maintainer(runtime.state().check_string(-1));
             }
             "homepage" => {
-                builder.homepage(runtime.state().check_string(-2));
+                builder.homepage(runtime.state().check_string(-1));
             }
             _ => {}
         }
 
-        runtime.state().pop(2);
+        runtime.state().pop(1);
     }
 
     if file.is_none() {

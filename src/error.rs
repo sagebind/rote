@@ -16,6 +16,7 @@ pub enum RoteError {
     FileNotReadable = 1,
     Runtime,
     TaskNotFound,
+    Unknown,
 }
 
 impl Error {
@@ -25,6 +26,11 @@ impl Error {
             code: code,
             description: String::from(description),
         }
+    }
+
+    /// Creates a new error with a given description.
+    pub fn new_desc(description: &str) -> Error {
+        Self::new(RoteError::Unknown, description)
     }
 
     /// Prints the error and terminates the program, exiting with the given error code.

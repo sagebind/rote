@@ -5,6 +5,7 @@ extern crate lazysort;
 extern crate lua;
 extern crate tar;
 extern crate term;
+extern crate time;
 
 use getopts::Options;
 use lazysort::SortedBy;

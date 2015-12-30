@@ -4,6 +4,7 @@ use std::fs::{self, File};
 use std::io::prelude::*;
 use std::process::Command;
 use tar::{Archive, Header};
+use time;
 
 
 pub enum Arch {
@@ -104,8 +105,11 @@ impl Package {
         let mut header = Header::new();
         header.set_path("control").unwrap();
         header.set_size(control_file.len() as u64);
-        header.set_mode(0644);
+        header.set_mode(0o644);
+        header.set_mtime(time::now().to_timespec().sec as u64);
         header.set_cksum();
+
+        println!("Time: {:?}", time::now().to_timespec().sec as u64);
 
         archive.append(&header, &mut control_file.as_bytes()).unwrap();
         archive.finish().unwrap();
