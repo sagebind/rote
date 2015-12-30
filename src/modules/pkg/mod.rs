@@ -22,10 +22,8 @@ fn tar(runtime: &mut Runtime, _: Option<usize>) -> i32 {
     let file = File::create(path).unwrap();
     let archive = Archive::new(file);
 
-    runtime.state().push_nil();
-    while runtime.state().next(2) {
-        let input_file = runtime.state().to_str(-1).unwrap().to_string();
-        runtime.state().pop(2);
+    for item in runtime.iter(2) {
+        let input_file: String = item.value().unwrap();
 
         if archive.append_path(input_file).is_err() {
             runtime.throw_error("failed to create tar archive");
@@ -46,50 +44,45 @@ fn deb(runtime: &mut Runtime, _: Option<usize>) -> i32 {
     let mut builder = PackageBuilder::new();
     let mut file: Option<String> = None;
 
-    runtime.state().push_nil();
-    while runtime.state().next(1) {
-        match runtime.state().check_string(-2) {
+    for item in runtime.iter(1) {
+        match &item.key::<String>().unwrap() as &str {
             "output" => {
-                file = Some(runtime.state().check_string(-1).to_string());
+                file = Some(item.value().unwrap());
             }
             "name" => {
-                builder.name(runtime.state().check_string(-1));
+                builder.name(&item.value::<String>().unwrap());
             }
             "section" => {
-                builder.section(runtime.state().check_string(-1));
+                builder.section(&item.value::<String>().unwrap());
             }
             "depends" => {
-                runtime.state().push_nil();
-                while runtime.state().next(3) {
-                    let package = runtime.state().check_string(-2).to_string();
-                    let version = runtime.state().check_string(-1).to_string();
+                for item in runtime.iter(-1) {
+                    let package: String = item.key().unwrap();
+                    let version: String = item.value().unwrap();
 
                     builder.add_depends((&package, &version));
-                    runtime.state().pop(1);
                 }
             }
             "description" => {
-                builder.short_desc(runtime.state().check_string(-1));
+                builder.short_desc(&item.value::<String>().unwrap());
             }
             "long_description" => {
-                builder.long_desc(runtime.state().check_string(-1));
+                builder.long_desc(&item.value::<String>().unwrap());
             }
             "size" => {
-                builder.size(runtime.state().check_integer(-1) as u64);
+                builder.size(item.value::<lua::Integer>().unwrap() as u64);
             }
             "version" => {
-                builder.version(runtime.state().check_string(-1));
+                builder.version(&item.value::<String>().unwrap());
             }
             "maintainer" => {
-                builder.maintainer(runtime.state().check_string(-1));
+                builder.maintainer(&item.value::<String>().unwrap());
             }
             "homepage" => {
-                builder.homepage(runtime.state().check_string(-1));
+                builder.homepage(&item.value::<String>().unwrap());
             }
             _ => {}
         }
-
-        runtime.state().pop(1);
     }
 
     if file.is_none() {

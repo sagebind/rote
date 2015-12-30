@@ -346,12 +346,8 @@ fn task(runtime: &mut Runtime, data: Option<usize>) -> i32 {
     let mut deps: Vec<String> = Vec::new();
     if runtime.state().is_table(arg_index) {
         // Read all of the names in the table and add it to the dependencies vector.
-        runtime.state().push_nil();
-        while runtime.state().next(arg_index) {
-            let dep = runtime.state().to_str(-1).unwrap().to_string();
-            runtime.state().pop(2);
-
-            deps.push(dep);
+        for item in runtime.iter(arg_index) {
+            deps.push(item.value().unwrap());
         }
 
         arg_index += 1;
@@ -389,12 +385,8 @@ fn rule(runtime: &mut Runtime, data: Option<usize>) -> i32 {
     let mut deps: Vec<String> = Vec::new();
     if runtime.state().is_table(arg_index) {
         // Read all of the names in the table and add it to the dependencies vector.
-        runtime.state().push_nil();
-        while runtime.state().next(arg_index) {
-            let dep = runtime.state().to_str(-1).unwrap().to_string();
-            runtime.state().pop(2);
-
-            deps.push(dep);
+        for item in runtime.iter(arg_index) {
+            deps.push(item.value().unwrap());
         }
 
         arg_index += 1;

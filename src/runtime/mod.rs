@@ -5,6 +5,13 @@ use lua::ffi;
 use modules::{fetch, Module};
 use std::mem;
 
+mod iter;
+
+pub use self::iter::{
+    TableIterator,
+    TableItem
+};
+
 
 /// A Lua script runtime for parsing and executing build script functions.
 pub struct Runtime {
@@ -26,6 +33,10 @@ impl Runtime {
         Runtime {
             state: lua::State::new(),
         }
+    }
+
+    pub fn from_ptr<'r>(ptr: *mut Runtime) -> &'r mut Runtime {
+        unsafe { &mut *ptr }
     }
 
     /// Initializes the runtime environment.
@@ -154,6 +165,10 @@ impl Runtime {
             // Invoke the function.
             f(&mut *runtime, data)
         }
+    }
+
+    pub fn iter(&mut self, index: lua::Index) -> TableIterator {
+        TableIterator::new(self.as_ptr(), index)
     }
 
     /// Gets the last error pushed on the Lua stack.

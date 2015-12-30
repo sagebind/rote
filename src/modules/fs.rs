@@ -259,10 +259,8 @@ fn combine(runtime: &mut Runtime, _: Option<usize>) -> i32 {
     let mut out_file = out_file.unwrap();
 
     // Walk through each path in the sources table and write their contents.
-    runtime.state().push_nil();
-    while runtime.state().next(1) {
-        runtime.state().push_value(-2);
-        let source = runtime.state().to_str(-2).unwrap().to_string();
+    for item in runtime.iter(1) {
+        let source: String = item.value().unwrap();
 
         let in_file = File::open(&source);
         if in_file.is_err() {
@@ -284,8 +282,6 @@ fn combine(runtime: &mut Runtime, _: Option<usize>) -> i32 {
             runtime.throw_error(&format!("failed to write to file \"{}\"", dest));
             return 0;
         }
-
-        runtime.state().pop(1);
     }
 
     0
