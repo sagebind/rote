@@ -4,7 +4,7 @@ cpp = {}
 
 
 function cpp.binary(options)
-    local options = rote.options(options, {
+    options = rote.options(options, {
         out = "bin/a.out",
         standard = "c++11",
         debug = true

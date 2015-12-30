@@ -4,10 +4,13 @@ cargo = {}
 
 
 -- Compile the current project.
-function cargo.build(params)
-    local args = {"cargo build --verbose"}
+function cargo.build(options)
+    options = rote.options(options, {
+        release = false
+    })
+    local args = {"cargo", "build", "--verbose"}
 
-    if params and params.release then
+    if options.release then
         table.insert(args, "--release")
     end
 

@@ -5,7 +5,7 @@ docker = {}
 
 -- Builds an image from a Dockerfile.
 function docker.build(options)
-    local options = rote.options(options, {
+    options = rote.options(options, {
         path = ".",
         cache = true,
     })
@@ -32,7 +32,7 @@ end
 
 -- Runs a command in a new Docker container.
 function docker.run(options)
-    local options = rote.options(options, {
+    options = rote.options(options, {
         image = nil,
         environment = {},
         expose = {},
@@ -109,6 +109,11 @@ function docker.run(options)
     end
 
     exec(table.unpack(args))
+end
+
+-- Save an image(s) to a tar archive (streamed to STDOUT by default).
+function docker.save(image, file_name)
+    exec("docker save", image, "--output=" .. file_name)
 end
 
 

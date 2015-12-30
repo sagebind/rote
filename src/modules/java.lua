@@ -4,7 +4,7 @@ java = {}
 
 
 function java.binary(options)
-    local options = rote.options(options, {
+    options = rote.options(options, {
         dest = ".",
         paths = {"."},
         warnings = true,
@@ -41,7 +41,7 @@ end
 function java.jar(options)
     local options = rote.options(options, {
         out = "out.jar",
-        mainClass = "org.myapp.Main",
+        main_class = "org.myapp.Main",
         manifest = false
     })
 
