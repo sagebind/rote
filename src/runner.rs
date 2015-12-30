@@ -110,10 +110,6 @@ impl Rule {
 
     /// Runs the rule with a specified matching file name.
     pub fn run(&self, file_name: &str) -> Result<(), Error> {
-        if self.is_satisfied(file_name) {
-            return Ok(());
-        }
-
         if self.func.is_none() {
             return Ok(());
         }
