@@ -1,4 +1,5 @@
 extern crate filetime;
+extern crate flate2;
 extern crate getopts;
 extern crate glob;
 extern crate lazysort;

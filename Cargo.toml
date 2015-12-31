@@ -7,6 +7,7 @@ readme = "README.md"
 
 [dependencies]
 filetime = "0.1"
+flate2 = "0.2"
 getopts = "0.2"
 glob = "0.2"
 lazysort = "0.1.0"

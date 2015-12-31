@@ -1,10 +1,16 @@
 use error::*;
+use flate2::Compression;
+use flate2::write::GzEncoder;
 use std::env;
 use std::fs::{self, File};
 use std::io::prelude::*;
+use std::path::{Path, PathBuf};
 use std::process::Command;
-use tar::{Archive, Header};
+use tar;
 use time;
+
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
 
 
 pub enum Arch {
@@ -49,9 +55,9 @@ impl ToString for Priority {
 
 pub struct Package {
     pub name: String,
+    pub files: Vec<(PathBuf, PathBuf)>,
     pub priority: Priority,
     pub section: String,
-    pub size: u64,
     pub depends: Vec<(String, String)>,
     pub maintainer: String,
     pub arch: Arch,
@@ -95,45 +101,58 @@ impl Package {
 
     fn create_control_archive(&self) -> String {
         let mut path = env::temp_dir();
-        path.push("control.tar");
+        path.push("control.tar.gz");
 
+        // Create a file to write the archive to temporarily.
         let file = File::create(&path).unwrap();
-        let archive = Archive::new(file);
+
+        // Wrap the file in a gzip encoder.
+        let file = GzEncoder::new(file, Compression::Default);
+
+        let archive = tar::Archive::new(file);
 
         let control_file = self.create_control_file();
 
-        let mut header = Header::new();
+        let mut header = tar::Header::new();
         header.set_path("control").unwrap();
         header.set_size(control_file.len() as u64);
         header.set_mode(0o644);
         header.set_mtime(time::now().to_timespec().sec as u64);
         header.set_cksum();
-
-        println!("Time: {:?}", time::now().to_timespec().sec as u64);
-
         archive.append(&header, &mut control_file.as_bytes()).unwrap();
+
         archive.finish().unwrap();
+        archive.into_inner().finish().unwrap();
 
         path.to_str().unwrap().to_string()
     }
 
     fn create_data_archive(&self) -> String {
         let mut path = env::temp_dir();
-        path.push("data.tar");
+        path.push("data.tar.gz");
 
         let file = File::create(&path).unwrap();
-        let archive = Archive::new(file);
 
-        let control_file = self.create_control_file();
+        // Wrap the file in a gzip encoder.
+        let file = GzEncoder::new(file, Compression::Default);
 
-        let mut header = Header::new();
-        header.set_path("control").unwrap();
-        header.set_size(control_file.len() as u64);
-        header.set_mode(0644);
-        header.set_cksum();
+        let archive = tar::Archive::new(file);
 
-        archive.append(&header, &mut control_file.as_bytes()).unwrap();
+        for paths in &self.files {
+            let mut file = File::open(&paths.0).unwrap();
+
+            let mut header = tar::Header::new();
+            header.set_metadata(&paths.0.metadata().unwrap());
+            header.set_path(&paths.1).unwrap();
+            header.set_mode(0o755);
+            header.set_uid(0);
+            header.set_gid(0);
+            header.set_cksum();
+            archive.append(&header, &mut file).unwrap();
+        }
+
         archive.finish().unwrap();
+        archive.into_inner().finish().unwrap();
 
         path.to_str().unwrap().to_string()
     }
@@ -144,7 +163,7 @@ impl Package {
         string.push_str(&format!("Package: {}\n", self.name));
         string.push_str(&format!("Priority: {}\n", self.priority.to_string()));
         string.push_str(&format!("Section: {}\n", self.section));
-        string.push_str(&format!("Installed-Size: {}\n", self.size));
+        string.push_str(&format!("Installed-Size: {}\n", self.get_size()));
 
         if !self.depends.is_empty() {
             string.push_str("Depends: ");
@@ -185,14 +204,27 @@ impl Package {
 
         string
     }
+
+    /// Calculates the installed size of the package based on the input files.
+    fn get_size(&self) -> u64 {
+        let mut size = 0;
+
+        if cfg!(unix) {
+            for paths in &self.files {
+                size += paths.0.metadata().unwrap().size();
+            }
+        }
+
+        (size / 1024) as u64
+    }
 }
 
 
 pub struct PackageBuilder {
     name: Option<String>,
+    files: Vec<(PathBuf, PathBuf)>,
     priority: Priority,
     section: String,
-    size: Option<u64>,
     depends: Vec<(String, String)>,
     maintainer: Option<String>,
     arch: Arch,
@@ -206,9 +238,9 @@ impl PackageBuilder {
     pub fn new() -> PackageBuilder {
         PackageBuilder {
             name: None,
+            files: Vec::new(),
             priority: Priority::Optional,
             section: "misc".to_string(),
-            size: None,
             depends: Vec::new(),
             maintainer: None,
             arch: Arch::All,
@@ -222,10 +254,6 @@ impl PackageBuilder {
     pub fn build(self) -> Result<Package, Error> {
         if self.name.is_none() {
             return Err(Error::new_desc("the package name must be specified"));
-        }
-
-        if self.size.is_none() {
-            return Err(Error::new_desc("the package size must be specified"));
         }
 
         if self.maintainer.is_none() {
@@ -242,9 +270,9 @@ impl PackageBuilder {
 
         Ok(Package {
             name: self.name.unwrap(),
+            files: self.files,
             priority: self.priority,
             section: self.section,
-            size: self.size.unwrap(),
             depends: self.depends,
             maintainer: self.maintainer.unwrap(),
             arch: self.arch,
@@ -260,6 +288,11 @@ impl PackageBuilder {
         self
     }
 
+    pub fn add_file(&mut self, source: &Path, destination: &Path) -> &mut Self {
+        self.files.push((source.to_path_buf(), destination.to_path_buf()));
+        self
+    }
+
     pub fn priority(&mut self, priority: Priority) -> &mut Self {
         self.priority = priority;
         self
@@ -267,11 +300,6 @@ impl PackageBuilder {
 
     pub fn section(&mut self, section: &str) -> &mut Self {
         self.section = section.to_string();
-        self
-    }
-
-    pub fn size(&mut self, size: u64) -> &mut Self {
-        self.size = Some(size);
         self
     }
 

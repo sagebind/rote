@@ -1,10 +1,11 @@
+use lua;
 use modules::ModuleTable;
-use modules::pkg::deb::PackageBuilder;
+use modules::pkg::deb::*;
 use runtime::Runtime;
 use std::error::Error;
 use std::fs::File;
+use std::path::Path;
 use tar::Archive;
-use lua;
 
 mod deb;
 
@@ -52,6 +53,52 @@ fn deb(runtime: &mut Runtime, _: Option<usize>) -> i32 {
             "name" => {
                 builder.name(&item.value::<String>().unwrap());
             }
+            "priority" => {
+                match &item.value::<String>().unwrap().to_lowercase() as &str {
+                    "essential" => {
+                        builder.priority(Priority::Essential);
+                    }
+                    "extra" => {
+                        builder.priority(Priority::Extra);
+                    }
+                    "important" => {
+                        builder.priority(Priority::Important);
+                    }
+                    "optional" => {
+                        builder.priority(Priority::Optional);
+                    }
+                    "required" => {
+                        builder.priority(Priority::Required);
+                    }
+                    "standard" => {
+                        builder.priority(Priority::Standard);
+                    }
+                    _ => {}
+                }
+            }
+            "arch" => {
+                match &item.value::<String>().unwrap().to_lowercase() as &str {
+                    "all" => {
+                        builder.arch(Arch::All);
+                    }
+                    "x86" => {
+                        builder.arch(Arch::X86);
+                    }
+                    "i386" => {
+                        builder.arch(Arch::X86);
+                    }
+                    "x64" => {
+                        builder.arch(Arch::X64);
+                    }
+                    "x86_64" => {
+                        builder.arch(Arch::X64);
+                    }
+                    "amd64" => {
+                        builder.arch(Arch::X64);
+                    }
+                    _ => {}
+                }
+            }
             "section" => {
                 builder.section(&item.value::<String>().unwrap());
             }
@@ -69,9 +116,6 @@ fn deb(runtime: &mut Runtime, _: Option<usize>) -> i32 {
             "long_description" => {
                 builder.long_desc(&item.value::<String>().unwrap());
             }
-            "size" => {
-                builder.size(item.value::<lua::Integer>().unwrap() as u64);
-            }
             "version" => {
                 builder.version(&item.value::<String>().unwrap());
             }
@@ -80,6 +124,14 @@ fn deb(runtime: &mut Runtime, _: Option<usize>) -> i32 {
             }
             "homepage" => {
                 builder.homepage(&item.value::<String>().unwrap());
+            }
+            "files" => {
+                for item in runtime.iter(-1) {
+                    let dest: String = item.key().unwrap();
+                    let source: String = item.value().unwrap();
+
+                    builder.add_file(Path::new(&source), Path::new(&dest));
+                }
             }
             _ => {}
         }
