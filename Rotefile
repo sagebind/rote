@@ -1,4 +1,6 @@
 require "cargo"
+require "fs"
+require "pkg"
 default "debug"
 
 
@@ -20,6 +22,27 @@ task("clean", function()
     cargo.clean()
 end)
 
+desc("Build a Debian binary package")
+task("deb", {"target/release/rote"}, function()
+    pkg.deb {
+        output = "target/release/rote.deb",
+        name = "rote",
+        version = cargo.info().version,
+        arch = "amd64",
+        maintainer = "Stephen Coakley <me@stephencoakley.com>",
+        description = "Plain and simple task and build tool",
+        long_description = "blah\n\nblah.",
+        depends = {
+            lib32gcc1 = ">= 5.0",
+            libc6 = ">= 2.21",
+            libgcc1 = ">= 5.0",
+        },
+        files = {
+            ["usr/bin/rote"] = "target/release/rote",
+        },
+    }
+end)
+
 desc("Runs tests")
 task("test", function()
     for _, file in ipairs(glob("tests/*.lua")) do
@@ -29,10 +52,15 @@ task("test", function()
         end)
 
         if not success then
-            print "FAIL!"
-            print("Reason: " .. err)
+            error("FAIL! Reason: " .. err)
         else
             print "PASS"
         end
     end
+end)
+
+rule("target/release/rote", function()
+    cargo.build {
+        release = true
+    }
 end)

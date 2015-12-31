@@ -1,11 +1,10 @@
 use error::*;
 use flate2::Compression;
 use flate2::write::GzEncoder;
-use std::env;
-use std::fs::{self, File};
+use modules::pkg::ar;
+use std::fs::File;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use tar;
 use time;
 
@@ -13,6 +12,7 @@ use time;
 use std::os::unix::fs::MetadataExt;
 
 
+/// An enum of allowed package target architectures.
 pub enum Arch {
     X86,
     X64,
@@ -30,6 +30,7 @@ impl ToString for Arch {
 }
 
 
+/// An enum of allowed package priorities.
 pub enum Priority {
     Essential,
     Extra,
@@ -53,6 +54,7 @@ impl ToString for Priority {
 }
 
 
+/// A representation of a Debian binary package file.
 pub struct Package {
     pub name: String,
     pub files: Vec<(PathBuf, PathBuf)>,
@@ -68,95 +70,81 @@ pub struct Package {
 }
 
 impl Package {
-    pub fn write_to(&self, file: &str) {
-        let debian_file = self.create_debian_file();
+    /// Writes a Debian package to a stream.
+    pub fn write_to<T: Write>(&self, stream: &mut T) {
+        let mut ar = ar::Ar::new(stream).unwrap();
+
+        ar.append(ar::Entry::new("2.0\n".as_bytes())
+            .name("debian-binary")
+        ).unwrap();
+
         let control_archive = self.create_control_archive();
+        ar.append(ar::Entry::new(&control_archive as &[u8])
+            .name("control.tar.gz")
+        ).unwrap();
+
         let data_archive = self.create_data_archive();
-
-        fs::remove_file(&file).unwrap_or(());
-
-        Command::new("ar")
-            .arg("rcD")
-            .arg(&file)
-            .arg(&debian_file)
-            .arg(&control_archive)
-            .arg(&data_archive)
-            .output()
-            .unwrap();
-
-        fs::remove_file(&debian_file).unwrap();
-        fs::remove_file(&control_archive).unwrap();
-        fs::remove_file(&data_archive).unwrap();
+        ar.append(ar::Entry::new(&data_archive as &[u8])
+            .name("data.tar.gz")
+        ).unwrap();
     }
 
-    fn create_debian_file(&self) -> String {
-        let mut path = env::temp_dir();
-        path.push("debian-binary");
+    /// Creates the control archive file.
+    fn create_control_archive(&self) -> Vec<u8> {
+        let mut buffer = Vec::new();
 
-        let mut file = File::create(&path).unwrap();
-        file.write_all(b"2.0\n").unwrap();
+        {
+            // Create a tar wrapped in a gzip encoder.
+            let encoder = GzEncoder::new(&mut buffer, Compression::Default);
+            let archive = tar::Archive::new(encoder);
 
-        path.to_str().unwrap().to_string()
-    }
-
-    fn create_control_archive(&self) -> String {
-        let mut path = env::temp_dir();
-        path.push("control.tar.gz");
-
-        // Create a file to write the archive to temporarily.
-        let file = File::create(&path).unwrap();
-
-        // Wrap the file in a gzip encoder.
-        let file = GzEncoder::new(file, Compression::Default);
-
-        let archive = tar::Archive::new(file);
-
-        let control_file = self.create_control_file();
-
-        let mut header = tar::Header::new();
-        header.set_path("control").unwrap();
-        header.set_size(control_file.len() as u64);
-        header.set_mode(0o644);
-        header.set_mtime(time::now().to_timespec().sec as u64);
-        header.set_cksum();
-        archive.append(&header, &mut control_file.as_bytes()).unwrap();
-
-        archive.finish().unwrap();
-        archive.into_inner().finish().unwrap();
-
-        path.to_str().unwrap().to_string()
-    }
-
-    fn create_data_archive(&self) -> String {
-        let mut path = env::temp_dir();
-        path.push("data.tar.gz");
-
-        let file = File::create(&path).unwrap();
-
-        // Wrap the file in a gzip encoder.
-        let file = GzEncoder::new(file, Compression::Default);
-
-        let archive = tar::Archive::new(file);
-
-        for paths in &self.files {
-            let mut file = File::open(&paths.0).unwrap();
+            let control_file = self.create_control_file();
 
             let mut header = tar::Header::new();
-            header.set_metadata(&paths.0.metadata().unwrap());
-            header.set_path(&paths.1).unwrap();
-            header.set_mode(0o755);
-            header.set_uid(0);
-            header.set_gid(0);
+            header.set_path("control").unwrap();
+            header.set_size(control_file.len() as u64);
+            header.set_mode(0o644);
+            header.set_mtime(time::now().to_timespec().sec as u64);
             header.set_cksum();
-            archive.append(&header, &mut file).unwrap();
+            archive.append(&header, &mut control_file.as_bytes()).unwrap();
+
+            archive.finish().unwrap();
+            archive.into_inner().finish().unwrap();
         }
 
-        archive.finish().unwrap();
-        archive.into_inner().finish().unwrap();
-
-        path.to_str().unwrap().to_string()
+        buffer
     }
 
+    /// Creates the data archive file.
+    fn create_data_archive(&self) -> Vec<u8> {
+        let mut buffer = Vec::new();
+
+        {
+            // Create a tar wrapped in a gzip encoder.
+            let encoder = GzEncoder::new(&mut buffer, Compression::Default);
+            let archive = tar::Archive::new(encoder);
+
+            for paths in &self.files {
+                let mut file = File::open(&paths.0).unwrap();
+
+                let mut header = tar::Header::new();
+                header.set_metadata(&paths.0.metadata().unwrap());
+                header.set_path(&paths.1).unwrap();
+                header.set_mode(0o755);
+                header.set_uid(0);
+                header.set_gid(0);
+                header.set_cksum();
+                archive.append(&header, &mut file).unwrap();
+            }
+
+            archive.finish().unwrap();
+            archive.into_inner().finish().unwrap();
+        }
+
+        buffer
+    }
+
+    /// Generates a control file from the package metadata.
     fn create_control_file(&self) -> String {
         let mut string = String::new();
 
@@ -220,6 +208,7 @@ impl Package {
 }
 
 
+/// A builder object for sequentially creating a package.
 pub struct PackageBuilder {
     name: Option<String>,
     files: Vec<(PathBuf, PathBuf)>,
@@ -235,6 +224,7 @@ pub struct PackageBuilder {
 }
 
 impl PackageBuilder {
+    /// Creates a new package builder.
     pub fn new() -> PackageBuilder {
         PackageBuilder {
             name: None,
@@ -251,6 +241,9 @@ impl PackageBuilder {
         }
     }
 
+    /// Attempts to build a package object from the current data.
+    ///
+    /// If the required fields have not been set, an error will be returned.
     pub fn build(self) -> Result<Package, Error> {
         if self.name.is_none() {
             return Err(Error::new_desc("the package name must be specified"));
@@ -283,56 +276,67 @@ impl PackageBuilder {
         })
     }
 
+    /// Sets the package name.
     pub fn name(&mut self, name: &str) -> &mut Self {
         self.name = Some(name.to_string());
         self
     }
 
+    /// Adds a file to the package.
     pub fn add_file(&mut self, source: &Path, destination: &Path) -> &mut Self {
         self.files.push((source.to_path_buf(), destination.to_path_buf()));
         self
     }
 
+    /// Sets the package priority.
     pub fn priority(&mut self, priority: Priority) -> &mut Self {
         self.priority = priority;
         self
     }
 
+    /// Sets the package section name.
     pub fn section(&mut self, section: &str) -> &mut Self {
         self.section = section.to_string();
         self
     }
 
+    /// Adds a package dependency.
     pub fn add_depends(&mut self, depends: (&str, &str)) -> &mut Self {
         self.depends.push((depends.0.to_string(), depends.1.to_string()));
         self
     }
 
+    /// Sets the package maintainer.
     pub fn maintainer(&mut self, maintainer: &str) -> &mut Self {
         self.maintainer = Some(maintainer.to_string());
         self
     }
 
+    /// Sets the package target architecture.
     pub fn arch(&mut self, arch: Arch) -> &mut Self {
         self.arch = arch;
         self
     }
 
+    /// Sets the package version.
     pub fn version(&mut self, version: &str) -> &mut Self {
         self.version = Some(version.to_string());
         self
     }
 
+    /// Sets the package homepage.
     pub fn homepage(&mut self, homepage: &str) -> &mut Self {
         self.homepage = Some(homepage.to_string());
         self
     }
 
+    /// Sets the package short description.
     pub fn short_desc(&mut self, short_desc: &str) -> &mut Self {
         self.short_desc = Some(short_desc.to_string());
         self
     }
 
+    /// Sets the package long description.
     pub fn long_desc(&mut self, long_desc: &str) -> &mut Self {
         self.long_desc = Some(long_desc.to_string());
         self

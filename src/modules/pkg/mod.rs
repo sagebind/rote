@@ -7,6 +7,7 @@ use std::fs::File;
 use std::path::Path;
 use tar::Archive;
 
+mod ar;
 mod deb;
 
 
@@ -142,6 +143,8 @@ fn deb(runtime: &mut Runtime, _: Option<usize>) -> i32 {
         return 0;
     }
 
+    let mut file = File::create(file.unwrap()).unwrap();
+
     let package = builder.build();
     if let Err(error) = package {
         runtime.throw_error(error.description());
@@ -149,7 +152,7 @@ fn deb(runtime: &mut Runtime, _: Option<usize>) -> i32 {
     }
     let package = package.unwrap();
 
-    package.write_to(&file.unwrap());
+    package.write_to(&mut file);
 
     0
 }
