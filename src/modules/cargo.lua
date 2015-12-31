@@ -1,4 +1,5 @@
 -- Module of tasks for Cargo, Rust's package manager.
+require "fs"
 
 cargo = {}
 
@@ -15,6 +16,38 @@ function cargo.build(options)
     end
 
     exec(table.unpack(args))
+end
+
+-- Gets metadata about the current Cargo package.
+function cargo.info()
+    if not fs.exists("Cargo.toml") then
+        return {}
+    end
+
+    local info = {
+        authors = {},
+    }
+    local file = fs.get("Cargo.toml")
+
+    for name in file:gmatch("name%s*=%s*\"([^\"]+)\"") do
+        info.name = name
+    end
+
+    for version in file:gmatch("version%s*=%s*\"([^\"]+)\"") do
+        info.version = version
+    end
+
+    for authors in file:gmatch("authors%s*=%s*%[([^%]]+)%]") do
+        for author in authors:gmatch("\"([^\"]+)\",?") do
+            table.insert(info.authors, author)
+        end
+    end
+
+    for license in file:gmatch("license%s*=%s*\"([^\"]+)\"") do
+        info.license = license
+    end
+
+    return info
 end
 
 -- Remove the target directory.
