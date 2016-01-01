@@ -189,6 +189,8 @@ impl Runner {
         runner.runtime.borrow_mut().register_fn("default", default, Some(ptr));
         runner.runtime.borrow_mut().register_fn("print", print, Some(ptr));
         runner.runtime.borrow_mut().register_fn("glob", glob, None);
+        runner.runtime.borrow_mut().register_fn("current_dir", current_dir, None);
+        runner.runtime.borrow_mut().register_fn("change_dir", change_dir, None);
         runner.runtime.borrow_mut().register_fn("export", export, None);
 
         // Load the core Lua module.
@@ -489,6 +491,27 @@ fn glob(runtime: &mut Runtime, _: Option<usize>) -> i32 {
     }
 
     1
+}
+
+/// Gets the current working directory.
+fn current_dir(runtime: &mut Runtime, _: Option<usize>) -> i32 {
+    env::current_dir()
+        .map(|dir| {
+            runtime.state().push(dir.to_str());
+            1
+        })
+        .unwrap_or(0)
+}
+
+/// Sets the current working directory.
+fn change_dir(runtime: &mut Runtime, _: Option<usize>) -> i32 {
+    let path = runtime.state().check_string(1).to_string();
+
+    if env::set_current_dir(path).is_err() {
+        runtime.throw_error("failed to change directory");
+    }
+
+    0
 }
 
 /// Exports an environment variable.
