@@ -194,16 +194,20 @@ impl Package {
     }
 
     /// Calculates the installed size of the package based on the input files.
+    #[cfg(unix)]
     fn get_size(&self) -> u64 {
         let mut size = 0;
 
-        if cfg!(unix) {
-            for paths in &self.files {
-                size += paths.0.metadata().unwrap().size();
-            }
+        for paths in &self.files {
+            size += paths.0.metadata().unwrap().size();
         }
 
         (size / 1024) as u64
+    }
+
+    #[cfg(windows)]
+    fn get_size(&self) -> u64 {
+        0
     }
 }
 
