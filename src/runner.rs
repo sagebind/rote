@@ -93,7 +93,8 @@ impl Rule {
 
         if let Some(age) = Self::get_age(file_name) {
             for dependency in &self.deps {
-                if let Some(dep_age) = runner.match_rule(dependency).and(Self::get_age(dependency)) {
+                if let Some(dep_age) = runner.match_rule(dependency)
+                                             .and(Self::get_age(dependency)) {
                     if dep_age > age {
                         return false;
                     }
@@ -117,7 +118,10 @@ impl Rule {
         let runner = unsafe { &*self.runner };
 
         // Get the function reference onto the Lua stack.
-        runner.runtime.borrow_mut().state().raw_geti(lua::REGISTRYINDEX, self.func.unwrap().value() as i64);
+        runner.runtime
+              .borrow_mut()
+              .state()
+              .raw_geti(lua::REGISTRYINDEX, self.func.unwrap().value() as i64);
 
         // Pass the file name in as the only argument.
         runner.runtime.borrow_mut().state().push_string(file_name);
@@ -200,7 +204,11 @@ impl Runner {
     }
 
     /// Creates a new task.
-    pub fn create_task(&mut self, name: String, description: Option<String>, deps: Vec<String>, func: lua::Reference) {
+    pub fn create_task(&mut self,
+                       name: String,
+                       description: Option<String>,
+                       deps: Vec<String>,
+                       func: lua::Reference) {
         let task = Task {
             name: name,
             description: description,
@@ -215,7 +223,11 @@ impl Runner {
     }
 
     /// Creates a new rule.
-    pub fn create_rule(&mut self, pattern: String, description: Option<String>, deps: Vec<String>, func: Option<lua::Reference>) {
+    pub fn create_rule(&mut self,
+                       pattern: String,
+                       description: Option<String>,
+                       deps: Vec<String>,
+                       func: Option<lua::Reference>) {
         let rule = Rule {
             pattern: pattern,
             description: description,
@@ -238,7 +250,8 @@ impl Runner {
 
     /// Gets a task or a matching file rule by name.
     pub fn get_task(&self, name: &str) -> Option<Rc<RefCell<Task>>> {
-        self.tasks.get(name)
+        self.tasks
+            .get(name)
             .map(|rc| rc.clone())
     }
 
@@ -292,26 +305,23 @@ impl Runner {
             } else {
                 println!("Nothing to be done for task \"{}\".", &name);
             }
-        }
-
-        // If the name is not a task, match it against a rule instead.
-        else if let Some(rule) = self.match_rule(&name) {
+        } else if let Some(rule) = self.match_rule(&name) {
             if !rule.is_satisfied(&name) {
                 try!(self.resolve_dependencies(&rule.deps));
 
                 if !self.dry_run {
                     try!(rule.run(&name));
                 } else {
-                    println!("Would run rule \"{}\" for file \"{}\".", &rule.pattern, &name);
+                    println!("Would run rule \"{}\" for file \"{}\".",
+                             &rule.pattern,
+                             &name);
                 }
             } else {
                 println!("Nothing to be done for file \"{}\".", &name);
             }
-        }
-
-        // The name matches nothing, so return an error.
-        else {
-            return Err(Error::new(RoteError::TaskNotFound, &format!("no task or rule found for \"{}\"", name)));
+        } else {
+            return Err(Error::new(RoteError::TaskNotFound,
+                                  &format!("no task or rule found for \"{}\"", name)));
         }
 
         // Pop the task off the call stack.
@@ -480,11 +490,11 @@ fn glob(runtime: &mut Runtime, _: Option<usize>) -> i32 {
                 // Push the path onto the return value list.
                 runtime.state().push(path.to_str().unwrap());
                 runtime.state().raw_seti(2, index);
-            },
+            }
 
             // if the path matched but was unreadable,
             // thereby preventing its contents from matching
-            Err(_) => {},
+            Err(_) => {}
         }
 
         index += 1;

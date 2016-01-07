@@ -7,20 +7,18 @@ use std::fs::{File, OpenOptions};
 use std::io::prelude::*;
 
 
-pub const MTABLE: ModuleTable = ModuleTable(&[
-    ("exists",      exists),
-    ("is_dir",      is_dir),
-    ("is_file",     is_file),
-    ("is_symlink",  is_symlink),
-    ("mkdir",       mkdir),
-    ("copy",        copy),
-    ("rename",      rename),
-    ("remove",      remove),
-    ("get",         get),
-    ("put",         put),
-    ("append",      append),
-    ("combine",     combine),
-]);
+pub const MTABLE: ModuleTable = ModuleTable(&[("exists", exists),
+                                              ("is_dir", is_dir),
+                                              ("is_file", is_file),
+                                              ("is_symlink", is_symlink),
+                                              ("mkdir", mkdir),
+                                              ("copy", copy),
+                                              ("rename", rename),
+                                              ("remove", remove),
+                                              ("get", get),
+                                              ("put", put),
+                                              ("append", append),
+                                              ("combine", combine)]);
 
 /// Checks if a file exists and is readable.
 ///
@@ -29,9 +27,7 @@ pub const MTABLE: ModuleTable = ModuleTable(&[
 fn exists(runtime: &mut Runtime, _: Option<usize>) -> i32 {
     let path = runtime.state().check_string(1).to_string();
 
-    runtime.state().push_bool(
-        fs::metadata(path).is_ok()
-    );
+    runtime.state().push_bool(fs::metadata(path).is_ok());
 
     1
 }
@@ -44,9 +40,7 @@ fn is_dir(runtime: &mut Runtime, _: Option<usize>) -> i32 {
     let path = runtime.state().check_string(1).to_string();
 
     let metadata = fs::metadata(path);
-    runtime.state().push_bool(
-        metadata.is_ok() && metadata.unwrap().file_type().is_dir()
-    );
+    runtime.state().push_bool(metadata.is_ok() && metadata.unwrap().file_type().is_dir());
 
     1
 }
@@ -59,9 +53,7 @@ fn is_file(runtime: &mut Runtime, _: Option<usize>) -> i32 {
     let path = runtime.state().check_string(1).to_string();
 
     let metadata = fs::metadata(path);
-    runtime.state().push_bool(
-        metadata.is_ok() && metadata.unwrap().file_type().is_file()
-    );
+    runtime.state().push_bool(metadata.is_ok() && metadata.unwrap().file_type().is_file());
 
     1
 }
@@ -74,9 +66,7 @@ fn is_symlink(runtime: &mut Runtime, _: Option<usize>) -> i32 {
     let path = runtime.state().check_string(1).to_string();
 
     let metadata = fs::metadata(path);
-    runtime.state().push_bool(
-        metadata.is_ok() && metadata.unwrap().file_type().is_symlink()
-    );
+    runtime.state().push_bool(metadata.is_ok() && metadata.unwrap().file_type().is_symlink());
 
     1
 }
@@ -187,10 +177,10 @@ fn put(runtime: &mut Runtime, _: Option<usize>) -> i32 {
     let contents = String::from(runtime.state().check_string(2));
 
     let file = OpenOptions::new()
-                .write(true)
-                .truncate(true)
-                .create(true)
-                .open(path);
+                   .write(true)
+                   .truncate(true)
+                   .create(true)
+                   .open(path);
 
     if file.is_err() {
         runtime.throw_error("failed to open file");
@@ -215,9 +205,9 @@ fn append(runtime: &mut Runtime, _: Option<usize>) -> i32 {
     let contents = String::from(runtime.state().check_string(2));
 
     let file = OpenOptions::new()
-                .write(true)
-                .append(true)
-                .open(path);
+                   .write(true)
+                   .append(true)
+                   .open(path);
 
     if file.is_err() {
         runtime.throw_error("failed to open file");
@@ -246,10 +236,10 @@ fn combine(runtime: &mut Runtime, _: Option<usize>) -> i32 {
     // Open the output file for writing.
     let dest = runtime.state().check_string(2).to_string();
     let out_file = OpenOptions::new()
-                .write(true)
-                .truncate(true)
-                .create(true)
-                .open(&dest);
+                       .write(true)
+                       .truncate(true)
+                       .create(true)
+                       .open(&dest);
 
     if out_file.is_err() {
         runtime.throw_error(&format!("failed to open file \"{}\"", dest));

@@ -23,7 +23,12 @@ impl<T: Read> Entry<T> {
             mode: [32; 8],
             size: [32; 10],
             stream: stream,
-        }.timestamp(0).owner_id(0).group_id(0).mode(0o644).size(0)
+        }
+        .timestamp(0)
+        .owner_id(0)
+        .group_id(0)
+        .mode(0o644)
+        .size(0)
     }
 
     /// Sets the file name of the entry.
@@ -106,9 +111,7 @@ impl<T: Write> Ar<T> {
     pub fn new(mut stream: T) -> Result<Ar<T>> {
         try!(stream.write_all(b"!<arch>\n"));
 
-        Ok(Ar {
-            stream: stream,
-        })
+        Ok(Ar { stream: stream })
     }
 
     /// Appends a file entry to the archve.

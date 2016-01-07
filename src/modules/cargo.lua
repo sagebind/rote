@@ -15,6 +15,11 @@ function cargo.build(options)
         table.insert(args, "--release")
     end
 
+    if options.target then
+        table.insert(args, "--target")
+        table.insert(args, options.target)
+    end
+
     exec(table.unpack(args))
 end
 

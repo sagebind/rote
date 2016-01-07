@@ -25,7 +25,8 @@ impl ToString for Arch {
             Arch::X86 => "i386",
             Arch::X64 => "amd64",
             Arch::All => "all",
-        }.to_string()
+        }
+        .to_string()
     }
 }
 
@@ -49,7 +50,8 @@ impl ToString for Priority {
             Priority::Optional => "optional",
             Priority::Required => "required",
             Priority::Standard => "standard",
-        }.to_string()
+        }
+        .to_string()
     }
 }
 
@@ -74,19 +76,16 @@ impl Package {
     pub fn write_to<T: Write>(&self, stream: &mut T) {
         let mut ar = ar::Ar::new(stream).unwrap();
 
-        ar.append(ar::Entry::new("2.0\n".as_bytes())
-            .name("debian-binary")
-        ).unwrap();
+        ar.append(ar::Entry::new("2.0\n".as_bytes()).name("debian-binary"))
+          .unwrap();
 
         let control_archive = self.create_control_archive();
-        ar.append(ar::Entry::new(&control_archive as &[u8])
-            .name("control.tar.gz")
-        ).unwrap();
+        ar.append(ar::Entry::new(&control_archive as &[u8]).name("control.tar.gz"))
+          .unwrap();
 
         let data_archive = self.create_data_archive();
-        ar.append(ar::Entry::new(&data_archive as &[u8])
-            .name("data.tar.gz")
-        ).unwrap();
+        ar.append(ar::Entry::new(&data_archive as &[u8]).name("data.tar.gz"))
+          .unwrap();
     }
 
     /// Creates the control archive file.
