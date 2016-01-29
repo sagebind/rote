@@ -1,5 +1,4 @@
 use error::Error;
-use error::RoteError;
 use lua;
 use lua::ffi;
 use modules::{fetch, Module};
@@ -20,7 +19,7 @@ pub struct Runtime {
 }
 
 /// A function that can be bound to be callable inside the Lua runtime.
-pub type RuntimeFn = fn(&mut Runtime, Option<usize>) -> i32;
+pub type RuntimeFn = fn(&mut Runtime) -> i32;
 
 /// A runtime instance that wraps a Lua state with convenience methods.
 ///
@@ -47,7 +46,7 @@ impl Runtime {
         self.state.open_libs();
 
         // Register the module loader.
-        self.register_loader(loader);
+        self.register_module_searcher(searcher);
     }
 
     /// Gets the runtime as a raw pointer.
@@ -72,10 +71,10 @@ impl Runtime {
         match result {
             lua::ThreadStatus::Ok => { }
             lua::ThreadStatus::FileError => {
-                return Err(Error::new(RoteError::FileNotReadable, &format!("the file \"{}\" could not be read", filename)));
+                throw!(Error::FileNotReadable(filename.to_string()));
             }
             _ => {
-                return Err(self.get_last_error().unwrap());
+                throw!(self.get_last_error().unwrap());
             }
         };
 
@@ -85,24 +84,24 @@ impl Runtime {
     /// Evaluates a Lua string inside the runtime.
     pub fn eval(&mut self, code: &str) -> Result<(), Error> {
         if self.state.do_string(code).is_err() {
-            return Err(self.get_last_error().unwrap());
+            throw!(self.get_last_error().unwrap());
         }
 
         Ok(())
     }
 
     /// Registers a global function in the runtime that can be called by Lua scripts.
-    pub fn register_fn(&mut self, name: &str, f: RuntimeFn, data: Option<usize>) {
-        self.push_fn(f, data);
+    pub fn register_fn(&mut self, name: &str, f: RuntimeFn) {
+        self.push_fn(f);
         self.state.set_global(name);
     }
 
-    /// Registers a function as a new package loader.
+    /// Registers a function as a new package searcher.
     ///
     /// The given loader is inserted into the list of module searchers before other loaders. This
     /// is to ensure that built-in and native modules are loaded quickly and cannot be shadowed by
     /// other modules of the same name.
-    pub fn register_loader(&mut self, f: RuntimeFn) {
+    pub fn register_module_searcher(&mut self, f: RuntimeFn) {
         self.state.get_global("package");
         self.state.get_field(-1, "searchers");
         let count = self.state.raw_len(-1) as i64;
@@ -113,7 +112,7 @@ impl Runtime {
             self.state.raw_seti(-2, count - i + 1);
         }
 
-        self.push_fn(f, None);
+        self.push_fn(f);
         self.state.raw_seti(-2, 2);
         self.state.pop(2);
     }
@@ -127,23 +126,16 @@ impl Runtime {
     }
 
     /// Pushes a safe runtime function onto the stack.
-    pub fn push_fn(&mut self, f: RuntimeFn, data: Option<usize>) {
+    pub fn push_fn(&mut self, f: RuntimeFn) {
         // First push a pointer to the runtime and a pointer to the given function so that we know
         // what function to delegate to and what runtime to pass.
         unsafe {
             self.state().push_light_userdata(self.as_ptr());
             self.state.push_light_userdata(f as *mut usize);
-
-            if let Some(data) = data {
-                self.state.push_number(1f64);
-                self.state.push_light_userdata(data as *mut usize);
-            } else {
-                self.state.push_number(0f64);
-            }
         }
 
         // Push a wrapper function onto the stack, which delegates to the given function.
-        self.state.push_closure(Some(fn_wrapper), if data.is_some() { 4 } else { 3 });
+        self.state.push_closure(Some(fn_wrapper), 2);
 
         // Wrapper function for invoking Rust functions from inside Lua.
         unsafe extern fn fn_wrapper(l: *mut ffi::lua_State) -> i32 {
@@ -155,15 +147,8 @@ impl Runtime {
             let f_raw_ptr = state.to_userdata(ffi::lua_upvalueindex(2)) as *mut usize;
             let f: RuntimeFn = mem::transmute(f_raw_ptr);
 
-            // Optionally get the closure data value.
-            let data = if state.to_number(ffi::lua_upvalueindex(3)) == 1f64 {
-                Some(state.to_userdata(ffi::lua_upvalueindex(4)) as usize)
-            } else {
-                None
-            };
-
             // Invoke the function.
-            f(&mut *runtime, data)
+            f(&mut *runtime)
         }
     }
 
@@ -174,10 +159,35 @@ impl Runtime {
     /// Gets the last error pushed on the Lua stack.
     pub fn get_last_error(&mut self) -> Option<Error> {
         if self.state.is_string(-1) {
-            Some(Error::new(RoteError::Runtime, self.state.to_str(-1).unwrap()))
+            Some(Error::RuntimeError(self.state.to_str(-1).unwrap().to_string()))
         } else {
             None
         }
+    }
+
+    /// Gets a stored pointer value from the runtime state registry.
+    pub fn reg_get<'a, T>(&mut self, name: &str) -> Option<&'a mut T> {
+        self.state().push_string(name);
+        self.state().get_table(lua::REGISTRYINDEX);
+
+        if !self.state().is_userdata(-1) {
+            return None;
+        }
+
+        unsafe {
+            let pointer = self.state().to_userdata(-1);
+            self.state().pop(1);
+            Some(mem::transmute(pointer))
+        }
+    }
+
+    /// Stores a pointer value into the runtime state registry.
+    pub fn reg_set(&mut self, name: &str, pointer: *mut usize) {
+        self.state().push_string(name);
+        unsafe {
+            self.state().push_light_userdata(pointer);
+        }
+        self.state().set_table(lua::REGISTRYINDEX);
     }
 }
 
@@ -185,9 +195,10 @@ impl Runtime {
 ///
 /// # Lua arguments
 /// * `name: string`         - The name of the module to load.
-fn loader(runtime: &mut Runtime, _: Option<usize>) -> i32 {
+fn searcher(runtime: &mut Runtime) -> i32 {
     // Get the module name as the first argument.
     let name = runtime.state().check_string(1).to_string();
+    info!("loading module \"{}\"", name);
 
     if let Some(module) = fetch(&name) {
         match module {
@@ -195,28 +206,27 @@ fn loader(runtime: &mut Runtime, _: Option<usize>) -> i32 {
                 runtime.state().load_string(source);
             },
             Module::Native(_) => {
-                runtime.push_fn(loader_native, None);
+                runtime.push_fn(loader_native);
             },
         };
     } else {
+        info!("no builtin module '{}'", name);
         runtime.state().push_string(&format!("\n\tno builtin module '{}'", name));
     }
     1
 }
 
 /// Native module loader callback.
-fn loader_native(runtime: &mut Runtime, _: Option<usize>) -> i32 {
+fn loader_native(runtime: &mut Runtime) -> i32 {
     let name = runtime.state().check_string(1).to_string();
 
     if let Some(Module::Native(mtable)) = fetch(&name) {
-        runtime.state().new_table();
+        runtime.state().create_table(mtable.0.len() as i32, 0);
 
         for &(name, func) in mtable.0 {
-            runtime.push_fn(func, None);
+            runtime.push_fn(func);
             runtime.state().set_field(-2, name);
         }
-
-        runtime.state().set_global(&name);
 
         1
     } else {

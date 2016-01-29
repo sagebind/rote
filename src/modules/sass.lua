@@ -1,8 +1,8 @@
-sass = {}
+local sass = {}
 
 
 function sass.compile(options)
-    options = rote.options(options, {
+    options = core.options(options, {
         input = nil,
         output = nil,
         style = "compressed",

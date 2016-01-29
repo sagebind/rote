@@ -1,4 +1,4 @@
-use error::*;
+use error::Error;
 use flate2::Compression;
 use flate2::write::GzEncoder;
 use modules::pkg::ar;
@@ -249,19 +249,19 @@ impl PackageBuilder {
     /// If the required fields have not been set, an error will be returned.
     pub fn build(self) -> Result<Package, Error> {
         if self.name.is_none() {
-            return Err(Error::new_desc("the package name must be specified"));
+            return Err(Error::OptionMissing("the package name must be specified".to_string()));
         }
 
         if self.maintainer.is_none() {
-            return Err(Error::new_desc("the package maintainer must be specified"));
+            return Err(Error::OptionMissing("the package maintainer must be specified".to_string()));
         }
 
         if self.version.is_none() {
-            return Err(Error::new_desc("the package version must be specified"));
+            return Err(Error::OptionMissing("the package version must be specified".to_string()));
         }
 
         if self.short_desc.is_none() {
-            return Err(Error::new_desc("the package short description must be specified"));
+            return Err(Error::OptionMissing("the package short description must be specified".to_string()));
         }
 
         Ok(Package {

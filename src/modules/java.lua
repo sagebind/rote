@@ -1,10 +1,9 @@
 -- Module for Java build tasks.
-
-java = {}
+local java = {}
 
 
 function java.binary(options)
-    options = rote.options(options, {
+    options = core.options(options, {
         dest = ".",
         paths = {"."},
         warnings = true,
@@ -39,7 +38,7 @@ function java.binary(options)
 end
 
 function java.jar(options)
-    local options = rote.options(options, {
+    local options = core.options(options, {
         out = "out.jar",
         main_class = "org.myapp.Main",
         manifest = false

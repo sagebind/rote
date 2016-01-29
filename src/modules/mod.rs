@@ -2,6 +2,7 @@ use runtime::RuntimeFn;
 
 mod fs;
 mod pkg;
+mod rote;
 
 
 /// A descriptor struct for a loadable module.
@@ -30,11 +31,13 @@ pub fn fetch(name: &str) -> Option<Module> {
         "cargo"     => Some(Module::Builtin(include_str!("cargo.lua"))),
         "cpp"       => Some(Module::Builtin(include_str!("cpp.lua"))),
         "docker"    => Some(Module::Builtin(include_str!("docker.lua"))),
+        "dsl"       => Some(Module::Builtin(include_str!("dsl.lua"))),
         "fs"        => Some(Module::Native(fs::MTABLE)),
         "git"       => Some(Module::Builtin(include_str!("git.lua"))),
         "java"      => Some(Module::Builtin(include_str!("java.lua"))),
         "pkg"       => Some(Module::Native(pkg::MTABLE)),
         "php"       => Some(Module::Builtin(include_str!("php.lua"))),
+        "rote"      => Some(Module::Native(rote::MTABLE)),
         "table"     => Some(Module::Builtin(include_str!("table.lua"))),
         // If you want to add a built-in module, add your module name and file here.
         _ => None

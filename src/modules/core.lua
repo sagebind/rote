@@ -1,57 +1,56 @@
--- Core functions provided by the Rote environment. This module is priveleged
+-- Core functions provided by the core environment. This module is priveleged
 -- and is always loaded before parsing any configuration files.
-
-rote = {}
+core = {}
 
 local print_raw = print
 local export_raw = export
 
 
 -- Expands global and environment variables inside a given string.
-function rote.expand(str)
+function core.expand(str)
     return string.gsub(str, "$(%w+)", function (name)
         return os.getenv(name) or _G[name] or ""
     end)
 end
 
 -- Exports an environment variable.
-function rote.export(key, value)
-    return export_raw(key, rote.expand(value))
+function core.export(key, value)
+    return export_raw(key, core.expand(value))
 end
 
 -- Escapes a string allowing it to be passed safely to a shell function.
-function rote.escape_arg(str)
+function core.escape_arg(str)
     return "'" .. string.gsub(str, "'", "\\'") .. "'"
 end
 
 -- Executes a shell command with a given list of arguments.
-function rote.execute(cmd, ...)
+function core.execute(cmd, ...)
     for i,arg in ipairs({...}) do
-        cmd = cmd .. " " .. rote.escape_arg(arg)
+        cmd = cmd .. " " .. core.escape_arg(arg)
     end
 
-    rote.print(rote.expand(cmd));
-    return os.execute(rote.expand(cmd))
+    core.print(core.expand(cmd));
+    return os.execute(core.expand(cmd))
 end
 
 -- Prints a string to standard output.
-function rote.print(str)
+function core.print(str)
     str = str or ""
-    print_raw(rote.expand(str))
+    print_raw(core.expand(str))
 end
 
-function rote.ask(str)
+function core.ask(str)
     io.write(str .. " ")
     return io.read("l")
 end
 
-function rote.ask_number(str)
+function core.ask_number(str)
     io.write(str .. " ")
     return io.read("n")
 end
 
 -- Parses an input table of options and merges it with a table of default values.
-function rote.options(given, defaults)
+function core.options(given, defaults)
     if given == nil then
         return defaults
     end
@@ -93,9 +92,9 @@ end
 
 
 -- Define some global function aliases.
-export = rote.export
-exec = rote.execute
-print = rote.print
+export = core.export
+exec = core.execute
+print = core.print
 
 
-return rote
+return core

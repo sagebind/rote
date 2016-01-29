@@ -1,6 +1,5 @@
 -- Module for Git VCS maintennance tasks.
-
-git = {}
+local git = {}
 
 
 -- Add file contents to the index.

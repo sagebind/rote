@@ -1,6 +1,5 @@
 -- Module for PHP build and maintennance tasks.
-
-php = {}
+local php = {}
 
 
 function php.server(port, host, dir)

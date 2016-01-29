@@ -17,7 +17,7 @@ pub const MTABLE: ModuleTable = ModuleTable(&[
 ]);
 
 
-fn tar(runtime: &mut Runtime, _: Option<usize>) -> i32 {
+fn tar(runtime: &mut Runtime) -> i32 {
     let path = runtime.state().check_string(1).to_string();
     runtime.state().check_type(2, lua::Type::Table);
 
@@ -40,7 +40,7 @@ fn tar(runtime: &mut Runtime, _: Option<usize>) -> i32 {
     0
 }
 
-fn deb(runtime: &mut Runtime, _: Option<usize>) -> i32 {
+fn deb(runtime: &mut Runtime) -> i32 {
     runtime.state().check_type(1, lua::Type::Table);
 
     let mut builder = PackageBuilder::new();

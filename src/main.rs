@@ -3,7 +3,9 @@ extern crate flate2;
 extern crate getopts;
 extern crate glob;
 extern crate lazysort;
+#[macro_use] extern crate log;
 extern crate lua;
+extern crate solicit;
 extern crate tar;
 extern crate term;
 extern crate time;
@@ -15,7 +17,8 @@ use std::fs;
 use std::path;
 use std::process;
 
-mod error;
+#[macro_use] mod error;
+mod logger;
 mod modules;
 mod runner;
 mod runtime;
@@ -54,6 +57,8 @@ fn print_task_list(runner: &runner::Runner) {
 
 /// Parses command-line options and runs retest.
 fn main() {
+    logger::init(logger::Filter::Warn).unwrap();
+
     let args: Vec<String> = env::args().collect();
 
     // Parse command-line flags.
@@ -63,15 +68,17 @@ fn main() {
     options.optopt("f", "file", "Read FILE as the Rotefile.", "FILE");
     options.optflag("h", "help", "Print this help menu and exit.");
     options.optflag("l", "list", "List available tasks.");
-    options.optflag("v", "version", "Print the program version and exit.");
+    options.optflag("V", "version", "Print the program version and exit.");
+    options.optflag("v", "verbose", "verbos");
 
-    let opt_matches = match options.parse(&args[1..]) {
-        Ok(matches) => { matches }
-        Err(err) => {
-            println!("error: {}", err);
-            process::exit(1);
-        }
-    };
+    let opt_matches = options.parse(&args[1..]).unwrap_or_else(|err| {
+        warn!("{}", err);
+        process::exit(2);
+    });
+
+    if opt_matches.opt_present("v") {
+        logger::init(logger::Filter::Trace).unwrap();
+    }
 
     // If the help flag is present show the usage message.
     if opt_matches.opt_present("h") {
@@ -87,14 +94,14 @@ fn main() {
             .map(|path| path.to_string())
         )
         .unwrap_or_else(|| {
-            println!("error: the path {} is not a file or is not readable", filename);
+            error!("the path {} is not a file or is not readable", filename);
             process::exit(1);
         });
 
     // If the directory flag is present, change directories first.
     if let Some(directory) = opt_matches.opt_str("C") {
         if env::set_current_dir(&directory).is_err() {
-            println!("error: failed to change directory to '{}'", &directory);
+            error!("failed to change directory to '{}'", &directory);
             process::exit(1);
         }
     }

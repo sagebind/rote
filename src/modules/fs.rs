@@ -24,7 +24,7 @@ pub const MTABLE: ModuleTable = ModuleTable(&[("exists", exists),
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to the file to check.
-fn exists(runtime: &mut Runtime, _: Option<usize>) -> i32 {
+fn exists(runtime: &mut Runtime) -> i32 {
     let path = runtime.state().check_string(1).to_string();
 
     runtime.state().push_bool(fs::metadata(path).is_ok());
@@ -36,7 +36,7 @@ fn exists(runtime: &mut Runtime, _: Option<usize>) -> i32 {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to check.
-fn is_dir(runtime: &mut Runtime, _: Option<usize>) -> i32 {
+fn is_dir(runtime: &mut Runtime) -> i32 {
     let path = runtime.state().check_string(1).to_string();
 
     let metadata = fs::metadata(path);
@@ -49,7 +49,7 @@ fn is_dir(runtime: &mut Runtime, _: Option<usize>) -> i32 {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to check.
-fn is_file(runtime: &mut Runtime, _: Option<usize>) -> i32 {
+fn is_file(runtime: &mut Runtime) -> i32 {
     let path = runtime.state().check_string(1).to_string();
 
     let metadata = fs::metadata(path);
@@ -62,7 +62,7 @@ fn is_file(runtime: &mut Runtime, _: Option<usize>) -> i32 {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to check.
-fn is_symlink(runtime: &mut Runtime, _: Option<usize>) -> i32 {
+fn is_symlink(runtime: &mut Runtime) -> i32 {
     let path = runtime.state().check_string(1).to_string();
 
     let metadata = fs::metadata(path);
@@ -75,12 +75,12 @@ fn is_symlink(runtime: &mut Runtime, _: Option<usize>) -> i32 {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to create the directory.
-fn mkdir(runtime: &mut Runtime, _: Option<usize>) -> i32 {
+fn mkdir(runtime: &mut Runtime) -> i32 {
     // Get the path as the first argument.
     let path = runtime.state().check_string(1).to_string();
 
     if fs::create_dir(&path).is_err() {
-        runtime.throw_error(&format!("fiailed to create directory \"{}\"", path));
+        runtime.throw_error(&format!("failed to create directory \"{}\"", path));
     }
 
     0
@@ -91,7 +91,7 @@ fn mkdir(runtime: &mut Runtime, _: Option<usize>) -> i32 {
 /// # Lua arguments
 /// * `source: string`          - Path of the file to copy.
 /// * `dest: string`            - Path to copy the file to.
-fn copy(runtime: &mut Runtime, _: Option<usize>) -> i32 {
+fn copy(runtime: &mut Runtime) -> i32 {
     let source = runtime.state().check_string(1).to_string();
     let dest = runtime.state().check_string(2).to_string();
 
@@ -107,7 +107,7 @@ fn copy(runtime: &mut Runtime, _: Option<usize>) -> i32 {
 /// # Lua arguments
 /// * `source: string`          - Path of the file to move.
 /// * `dest: string`            - Path to move the file to.
-fn rename(runtime: &mut Runtime, _: Option<usize>) -> i32 {
+fn rename(runtime: &mut Runtime) -> i32 {
     let source = runtime.state().check_string(1).to_string();
     let destination = runtime.state().check_string(2).to_string();
 
@@ -122,7 +122,7 @@ fn rename(runtime: &mut Runtime, _: Option<usize>) -> i32 {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path of the file or directory to remove.
-fn remove(runtime: &mut Runtime, _: Option<usize>) -> i32 {
+fn remove(runtime: &mut Runtime) -> i32 {
     let path = runtime.state().check_string(1).to_string();
 
     if let Ok(metadata) = fs::metadata(&path) {
@@ -144,7 +144,7 @@ fn remove(runtime: &mut Runtime, _: Option<usize>) -> i32 {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path of the file to read from.
-fn get(runtime: &mut Runtime, _: Option<usize>) -> i32 {
+fn get(runtime: &mut Runtime) -> i32 {
     let path = runtime.state().check_string(1).to_string();
 
     let file = File::open(path);
@@ -172,7 +172,7 @@ fn get(runtime: &mut Runtime, _: Option<usize>) -> i32 {
 /// # Lua arguments
 /// * `path: string`            - Path to the file to write to.
 /// * `contents: string`        - The contents to write.
-fn put(runtime: &mut Runtime, _: Option<usize>) -> i32 {
+fn put(runtime: &mut Runtime) -> i32 {
     let path = runtime.state().check_string(1).to_string();
     let contents = String::from(runtime.state().check_string(2));
 
@@ -200,7 +200,7 @@ fn put(runtime: &mut Runtime, _: Option<usize>) -> i32 {
 /// # Lua arguments
 /// * `path: string`            - Path to the file to append to.
 /// * `contents: string`        - The contents to append.
-fn append(runtime: &mut Runtime, _: Option<usize>) -> i32 {
+fn append(runtime: &mut Runtime) -> i32 {
     let path = runtime.state().check_string(1).to_string();
     let contents = String::from(runtime.state().check_string(2));
 
@@ -227,7 +227,7 @@ fn append(runtime: &mut Runtime, _: Option<usize>) -> i32 {
 /// # Lua arguments
 /// * `sources: table`          - A list of source files to combine.
 /// * `dest: string`            - The path to the output file.
-fn combine(runtime: &mut Runtime, _: Option<usize>) -> i32 {
+fn combine(runtime: &mut Runtime) -> i32 {
     if !runtime.state().is_table(1) {
         runtime.throw_error("first argument must be a table");
         return 0;

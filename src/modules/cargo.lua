@@ -1,12 +1,11 @@
 -- Module of tasks for Cargo, Rust's package manager.
-require "fs"
-
-cargo = {}
+fs = require "fs"
+local cargo = {}
 
 
 -- Compile the current project.
 function cargo.build(options)
-    options = rote.options(options, {
+    options = core.options(options, {
         release = false
     })
     local args = {"cargo", "build", "--verbose"}

@@ -1,6 +1,5 @@
 -- Module of tasks for Docker, the Linux container suite.
-
-docker = {}
+local docker = {}
 
 
 -- Builds an image from a Dockerfile.
