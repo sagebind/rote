@@ -1,14 +1,11 @@
 extern crate filetime;
-extern crate flate2;
 extern crate getopts;
 extern crate glob;
+extern crate lua;
 extern crate lazysort;
 #[macro_use] extern crate log;
-extern crate lua;
-extern crate solicit;
-extern crate tar;
+extern crate runtime;
 extern crate term;
-extern crate time;
 
 use getopts::Options;
 use lazysort::SortedBy;
@@ -17,11 +14,8 @@ use std::fs;
 use std::path;
 use std::process;
 
-#[macro_use] mod error;
 mod logger;
-mod modules;
 mod runner;
-mod runtime;
 
 
 /// Prints the program usage to the console.
@@ -57,8 +51,6 @@ fn print_task_list(runner: &runner::Runner) {
 
 /// Parses command-line options and runs retest.
 fn main() {
-    logger::init(logger::Filter::Warn).unwrap();
-
     let args: Vec<String> = env::args().collect();
 
     // Parse command-line flags.
@@ -78,6 +70,8 @@ fn main() {
 
     if opt_matches.opt_present("v") {
         logger::init(logger::Filter::Trace).unwrap();
+    } else {
+        logger::init(logger::Filter::Warn).unwrap();
     }
 
     // If the help flag is present show the usage message.
@@ -119,7 +113,10 @@ fn main() {
     println!("Build file: {}\r\n", &path);
 
     // Create a new script runtime.
-    let mut runner = runner::Runner::new(opt_matches.opt_present("d")).unwrap();
+    let mut runner = runner::Runner::new(opt_matches.opt_present("d")).unwrap_or_else(|e| {
+        e.die();
+        unreachable!();
+    });
     if let Err(e) = runner.load(&path) {
         e.die();
     }

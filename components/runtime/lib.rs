@@ -1,15 +1,20 @@
+#[macro_use] extern crate log;
+extern crate lua;
+
 use error::Error;
-use lua;
 use lua::ffi;
-use modules::{fetch, Module};
+use std::clone;
 use std::mem;
 
+#[macro_use] pub mod error;
 mod iter;
 
 pub use self::iter::{
     TableIterator,
     TableItem
 };
+
+pub use lua::ffi::lua_State as LuaState;
 
 
 /// A Lua script runtime for parsing and executing build script functions.
@@ -19,23 +24,30 @@ pub struct Runtime {
 }
 
 /// A function that can be bound to be callable inside the Lua runtime.
-pub type RuntimeFn = fn(&mut Runtime) -> i32;
+pub type RuntimeFn = fn(Runtime) -> i32;
+
 
 /// A runtime instance that wraps a Lua state with convenience methods.
 ///
-/// The runtime instance should be allocated onto the heap before it is initialized. This allows
-/// the runtime object to be passed around as raw pointers in closure upvalues without address
-/// errors.
+/// The entirety of a runtime's state is contained within the Lua state that it wraps; this allows multiple runtime
+/// objects to coexist safely at different memory locations and refer to the same runtime data.
 impl Runtime {
     /// Creates a new runtime instance.
+    ///
+    /// Creates a new Lua state, which is owned by the returned runtime.
     pub fn new() -> Runtime {
         Runtime {
             state: lua::State::new(),
         }
     }
 
-    pub fn from_ptr<'r>(ptr: *mut Runtime) -> &'r mut Runtime {
-        unsafe { &mut *ptr }
+    /// Gets a runtime instance from a pointer.
+    ///
+    /// The state is not owned by the returned runtime instance.
+    pub fn from_ptr<'r>(ptr: *mut LuaState) -> Runtime {
+        Runtime {
+            state: unsafe { lua::State::from_ptr(ptr) }
+        }
     }
 
     /// Initializes the runtime environment.
@@ -46,19 +58,19 @@ impl Runtime {
         self.state.open_libs();
 
         // Register the module loader.
-        self.register_module_searcher(searcher);
+        //self.register_module_searcher(searcher);
     }
 
     /// Gets the runtime as a raw pointer.
-    pub fn as_ptr(&self) -> *mut Runtime {
-        self as *const Runtime as *mut Runtime
+    pub fn as_ptr(&self) -> *mut LuaState {
+        self.state.as_ptr()
     }
 
     /// Gets a mutable instance of the Lua interpreter state.
     ///
     /// This function uses the direct lua_State pointer, so multiple owners can all mutate the same
     /// state simultaneously. Obviously this is a little unsafe, so use responsibly.
-    pub fn state(&mut self) -> lua::State {
+    pub fn state(&self) -> lua::State {
         let ptr = self.state.as_ptr();
         unsafe { lua::State::from_ptr(ptr) }
     }
@@ -84,7 +96,7 @@ impl Runtime {
     /// Evaluates a Lua string inside the runtime.
     pub fn eval(&mut self, code: &str) -> Result<(), Error> {
         if self.state.do_string(code).is_err() {
-            throw!(self.get_last_error().unwrap());
+            //throw!(self.get_last_error().unwrap());
         }
 
         Ok(())
@@ -94,6 +106,16 @@ impl Runtime {
     pub fn register_fn(&mut self, name: &str, f: RuntimeFn) {
         self.push_fn(f);
         self.state.set_global(name);
+    }
+
+    /// Registers a new dynamic module library.
+    pub fn register_lib(&mut self, mtable: &[(&str, RuntimeFn)]) {
+        self.state().create_table(0, mtable.len() as i32);
+
+        for &(name, func) in mtable {
+            self.push_fn(func);
+            self.state().set_field(-2, name);
+        }
     }
 
     /// Registers a function as a new package searcher.
@@ -117,6 +139,37 @@ impl Runtime {
         self.state.pop(2);
     }
 
+    /// Adds a path to Lua's require path for modules.
+    pub fn add_path(&mut self, path: &str) {
+        self.state.get_global("package");
+        self.state.get_field(-1, "path");
+
+        let current_path = self.state.to_str(-1).unwrap().to_string();
+
+        let mut new_path = String::from(path);
+        new_path.push(';');
+        new_path.push_str(&current_path);
+
+        self.state.push_string(&new_path);
+        self.state.set_field(-4, "path");
+        self.state.pop(3);
+    }
+
+    /// Adds a path to Lua's require path for native modules.
+    pub fn add_cpath(&mut self, path: &str) {
+        self.state.get_global("package");
+        self.state.get_field(-1, "cpath");
+
+        let current_path = self.state.to_str(-1).unwrap().to_string();
+        let mut new_path = String::from(path);
+        new_path.push(';');
+        new_path.push_str(&current_path);
+
+        self.state.push_string(&new_path);
+        self.state.set_field(-4, "cpath");
+        self.state.pop(3);
+    }
+
     /// Raises an error message.
     pub fn throw_error(&mut self, message: &str) {
         self.state.location(1);
@@ -130,30 +183,28 @@ impl Runtime {
         // First push a pointer to the runtime and a pointer to the given function so that we know
         // what function to delegate to and what runtime to pass.
         unsafe {
-            self.state().push_light_userdata(self.as_ptr());
             self.state.push_light_userdata(f as *mut usize);
         }
 
         // Push a wrapper function onto the stack, which delegates to the given function.
-        self.state.push_closure(Some(fn_wrapper), 2);
+        self.state.push_closure(Some(fn_wrapper), 1);
 
         // Wrapper function for invoking Rust functions from inside Lua.
-        unsafe extern fn fn_wrapper(l: *mut ffi::lua_State) -> i32 {
+        unsafe extern fn fn_wrapper(ptr: *mut LuaState) -> i32 {
             // Get the runtime from the raw pointer.
-            let mut state = lua::State::from_ptr(l);
-            let runtime = state.to_userdata(ffi::lua_upvalueindex(1)) as *mut Runtime;
+            let mut runtime = Runtime::from_ptr(ptr);
 
             // Get the raw pointer and turn it back into a Rust function pointer.
-            let f_raw_ptr = state.to_userdata(ffi::lua_upvalueindex(2)) as *mut usize;
+            let f_raw_ptr = runtime.state.to_userdata(ffi::lua_upvalueindex(1)) as *mut usize;
             let f: RuntimeFn = mem::transmute(f_raw_ptr);
 
             // Invoke the function.
-            f(&mut *runtime)
+            f(runtime)
         }
     }
 
     pub fn iter(&mut self, index: lua::Index) -> TableIterator {
-        TableIterator::new(self.as_ptr(), index)
+        TableIterator::new(self.clone(), index)
     }
 
     /// Gets the last error pushed on the Lua stack.
@@ -191,6 +242,15 @@ impl Runtime {
     }
 }
 
+// Runtime objects can be cloned; this just creates a new object pointing to the same Lua state.
+impl clone::Clone for Runtime {
+    fn clone(&self) -> Runtime {
+        Runtime::from_ptr(self.as_ptr())
+    }
+}
+
+
+/*
 /// A Lua module loader that loads built-in modules.
 ///
 /// # Lua arguments
@@ -233,3 +293,4 @@ fn loader_native(runtime: &mut Runtime) -> i32 {
         0
     }
 }
+*/

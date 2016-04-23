@@ -1,0 +1,12 @@
+[package]
+name = "fs"
+version = "0.1.0"
+authors = ["coderstephen <me@stephencoakley.com>"]
+
+[lib]
+name = "fs"
+path = "lib.rs"
+crate-type = ["dylib"]
+
+[dependencies]
+runtime = { path = "../runtime" }

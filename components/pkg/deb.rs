@@ -1,7 +1,7 @@
-use error::Error;
+use runtime::error::Error;
 use flate2::Compression;
 use flate2::write::GzEncoder;
-use modules::pkg::ar;
+use pkg::ar;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};

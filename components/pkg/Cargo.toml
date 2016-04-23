@@ -1,0 +1,16 @@
+[package]
+name = "pkg"
+version = "0.1.0"
+authors = ["coderstephen <me@stephencoakley.com>"]
+
+[lib]
+name = "pkg"
+path = "lib.rs"
+crate-type = ["dylib"]
+
+[dependencies]
+runtime = { path = "../runtime" }
+
+flate2 = "0.2"
+tar = "0.3.2"
+time = "0.1"

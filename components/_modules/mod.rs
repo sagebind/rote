@@ -1,7 +1,8 @@
 use runtime::RuntimeFn;
 
-mod fs;
-mod pkg;
+//mod fs;
+//mod http;
+//mod pkg;
 mod rote;
 
 
@@ -27,15 +28,17 @@ pub struct ModuleTable(pub &'static [(&'static str, RuntimeFn)]);
 pub fn fetch(name: &str) -> Option<Module> {
     match name {
         // Statically include and match the built-in modules.
+        "busted"      => Some(Module::Builtin(include_str!("busted.lua"))),
         "core"      => Some(Module::Builtin(include_str!("core.lua"))),
         "cargo"     => Some(Module::Builtin(include_str!("cargo.lua"))),
         "cpp"       => Some(Module::Builtin(include_str!("cpp.lua"))),
         "docker"    => Some(Module::Builtin(include_str!("docker.lua"))),
         "dsl"       => Some(Module::Builtin(include_str!("dsl.lua"))),
-        "fs"        => Some(Module::Native(fs::MTABLE)),
+        //"fs"        => Some(Module::Native(fs::MTABLE)),
         "git"       => Some(Module::Builtin(include_str!("git.lua"))),
+        //"http"      => Some(Module::Native(http::MTABLE)),
         "java"      => Some(Module::Builtin(include_str!("java.lua"))),
-        "pkg"       => Some(Module::Native(pkg::MTABLE)),
+        //"pkg"       => Some(Module::Native(pkg::MTABLE)),
         "php"       => Some(Module::Builtin(include_str!("php.lua"))),
         "rote"      => Some(Module::Native(rote::MTABLE)),
         "table"     => Some(Module::Builtin(include_str!("table.lua"))),

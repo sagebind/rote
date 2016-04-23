@@ -1,4 +1,4 @@
-use error::Error;
+use runtime::error::Error;
 use filetime::FileTime;
 use glob;
 use lua;
@@ -50,7 +50,7 @@ impl Task {
 
         // Invoke the task function.
         if runner.runtime.borrow_mut().state().pcall(args.len() as i32, 0, 0).is_err() {
-            throw!(runner.runtime.borrow_mut().get_last_error().unwrap());
+            runner.runtime.borrow_mut().get_last_error().unwrap();
         }
 
         Ok(())
@@ -128,7 +128,7 @@ impl Rule {
 
         // Invoke the task function.
         if runner.runtime.borrow_mut().state().pcall(1, 0, 0).is_err() {
-            throw!(runner.runtime.borrow_mut().get_last_error().unwrap());
+            runner.runtime.borrow_mut().get_last_error().unwrap();
         }
 
         Ok(())
@@ -190,10 +190,13 @@ impl Runner {
         runner.runtime.borrow_mut().register_fn("current_dir", current_dir);
         runner.runtime.borrow_mut().register_fn("change_dir", change_dir);
         runner.runtime.borrow_mut().register_fn("export", export);
+        runner.runtime.borrow_mut().register_fn("create_task", create_task);
+        runner.runtime.borrow_mut().register_fn("create_rule", create_rule);
+        runner.runtime.borrow_mut().register_fn("set_default_task", set_default_task);
 
         // Load the core Lua module.
         try!(runner.runtime.borrow_mut().eval("require 'dsl'"));
-        try!(runner.runtime.borrow_mut().eval("require 'core'"));
+        try!(runner.runtime.borrow_mut().eval("rote = require 'core'"));
 
         Ok(runner)
     }
@@ -277,7 +280,7 @@ impl Runner {
             if let Some(ref task) = self.default_task {
                 task.clone()
             } else {
-                throw!(Error::TaskNotFound(name.to_string()));
+                return Err(Error::TaskNotFound(name.to_string()));
             }
         } else {
             name.to_string()
@@ -315,7 +318,7 @@ impl Runner {
                 println!("Nothing to be done for file \"{}\".", &name);
             }
         } else {
-            throw!(Error::TaskNotFound(name));
+            Error::TaskNotFound(name);
         }
 
         // Pop the task off the call stack.
@@ -333,15 +336,19 @@ impl Runner {
     }
 
     fn set_environment(&self) {
-        // Set a pointer we can use to fetch the runner from within the runtime.
-        self.runtime.borrow_mut().reg_set("runner", self as *const Runner as *mut usize);
+        let mut runtime = self.runtime.borrow_mut();
+        runtime.add_path("./components/_modules/?.lua");
+        runtime.add_cpath("./components/?/target/debug/lib?.so");
 
-        self.runtime.borrow_mut().state().push_string(if cfg!(windows) {
+        // Set a pointer we can use to fetch the runner from within the runtime.
+        runtime.reg_set("runner", self as *const Runner as *mut usize);
+
+        runtime.state().push_string(if cfg!(windows) {
             "windows"
         } else {
             "unix"
         });
-        self.runtime.borrow_mut().state().set_global("OS");
+        runtime.state().set_global("OS");
     }
 }
 
@@ -349,7 +356,7 @@ impl Runner {
 ///
 /// # Lua arguments
 /// * `str: string` - The string to print.
-fn print(runtime: &mut Runtime) -> i32 {
+fn print(mut runtime: Runtime) -> i32 {
     let runner: &mut Runner = runtime.reg_get("runner").unwrap();
     let string = runtime.state().check_string(1).to_string();
     let mut out = term::stdout().unwrap();
@@ -372,7 +379,7 @@ fn print(runtime: &mut Runtime) -> i32 {
 ///
 /// # Lua arguments
 /// * `pattern: string` - The glob pattern to match.
-fn glob(runtime: &mut Runtime) -> i32 {
+fn glob(runtime: Runtime) -> i32 {
     // Get the pattern as the first argument.
     let pattern = runtime.state().check_string(1).to_string();
 
@@ -401,7 +408,7 @@ fn glob(runtime: &mut Runtime) -> i32 {
 }
 
 /// Gets the current working directory.
-fn current_dir(runtime: &mut Runtime) -> i32 {
+fn current_dir(runtime: Runtime) -> i32 {
     env::current_dir()
         .map(|dir| {
             runtime.state().push(dir.to_str());
@@ -411,7 +418,7 @@ fn current_dir(runtime: &mut Runtime) -> i32 {
 }
 
 /// Sets the current working directory.
-fn change_dir(runtime: &mut Runtime) -> i32 {
+fn change_dir(mut runtime: Runtime) -> i32 {
     let path = runtime.state().check_string(1).to_string();
 
     if env::set_current_dir(path).is_err() {
@@ -426,11 +433,95 @@ fn change_dir(runtime: &mut Runtime) -> i32 {
 /// # Lua arguments
 /// * `key: string` - The variable name.
 /// * `value: string` - The value to set.
-fn export(runtime: &mut Runtime) -> i32 {
+fn export(runtime: Runtime) -> i32 {
     let key = runtime.state().check_string(1).to_string();
     let value = runtime.state().check_string(2).to_string();
 
     env::set_var(key, value);
+
+    0
+}
+
+/// Creates a new task.
+///
+/// # Lua arguments
+/// * `name: string`         - The name of the task.
+/// * `description: string`  - A description of the task. (Optional)
+/// * `dependencies: table`  - A list of task names that the task depends on. (Optional)
+/// * `func: function`       - A function that should be called when the task is run.
+fn create_task(mut runtime: Runtime) -> i32 {
+    let runner: &mut Runner = runtime.reg_get("runner").unwrap();
+
+    let name = runtime.state().check_string(1).to_string();
+    let desc = if runtime.state().is_string(2) {
+        Some(runtime.state().check_string(2).to_string())
+    } else {
+        None
+    };
+
+    // Read the dependency table.
+    runtime.state().check_type(3, lua::Type::Table);
+    let deps: Vec<String> = runtime.iter(3)
+        .map(|item| item.value().unwrap())
+        .collect();
+
+    // Get a portable reference to the task function.
+    runtime.state().check_type(4, lua::Type::Function);
+    let func = runtime.state().reference(lua::REGISTRYINDEX);
+
+    runner.create_task(name, desc, deps, func);
+    0
+}
+
+/// Defines a new rule.
+///
+/// # Lua arguments
+/// * `pattern: string`      - The name of the task.
+/// * `description: string`  - A description of the task. (Optional)
+/// * `dependencies: table`  - A list of task names that the rule depends on. (Optional)
+/// * `func: function`       - A function that should be called when the rule is run. (Optional)
+fn create_rule(mut runtime: Runtime) -> i32 {
+    let runner: &mut Runner = runtime.reg_get("runner").unwrap();
+
+    let pattern = runtime.state().check_string(1).to_string();
+    let desc = if runtime.state().is_string(2) {
+        Some(runtime.state().check_string(2).to_string())
+    } else {
+        None
+    };
+
+    // Read the dependency table.
+    runtime.state().check_type(3, lua::Type::Table);
+    let deps: Vec<String> = runtime.iter(3)
+        .map(|item| item.value().unwrap())
+        .collect();
+
+    // Third argument is the task function.
+    let func = runtime.state().type_of(4).and_then(|t| {
+        if t == lua::Type::Function {
+            // Get a portable reference to the task function.
+            Some(runtime.state().reference(lua::REGISTRYINDEX))
+        } else {
+            None
+        }
+    });
+
+    runner.create_rule(pattern, desc, deps, func);
+    0
+}
+
+/// Sets the default task.
+///
+/// # Lua arguments
+/// * `name: string` - The name of the task to set as default.
+fn set_default_task(mut runtime: Runtime) -> i32 {
+    let runner: &mut Runner = runtime.reg_get("runner").unwrap();
+
+    // Get the task name as the first argument.
+    let name = runtime.state().check_string(1).to_string();
+
+    // Set the default task to the given name.
+    runner.default_task = Some(name);
 
     0
 }

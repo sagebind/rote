@@ -1,0 +1,12 @@
+[package]
+name = "runtime"
+version = "0.1.0"
+authors = ["coderstephen <me@stephencoakley.com>"]
+
+[lib]
+name = "runtime"
+path = "lib.rs"
+
+[dependencies]
+log = "0.3.5"
+lua = { git = "https://github.com/jcmoyer/rust-lua53" }

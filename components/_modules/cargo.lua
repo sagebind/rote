@@ -1,14 +1,15 @@
 -- Module of tasks for Cargo, Rust's package manager.
-fs = require "fs"
+local fs = require "fs"
 local cargo = {}
 
 
 -- Compile the current project.
 function cargo.build(options)
     options = core.options(options, {
-        release = false
+        release = false,
+        flags = {},
     })
-    local args = {"cargo", "build", "--verbose"}
+    local args = {"cargo", "rustc", "--verbose"}
 
     if options.release then
         table.insert(args, "--release")
@@ -17,6 +18,13 @@ function cargo.build(options)
     if options.target then
         table.insert(args, "--target")
         table.insert(args, options.target)
+    end
+
+    if options.flags then
+        table.insert(args, "--")
+        for i, flag in ipairs(options.flags) do
+            table.insert(args, flag)
+        end
     end
 
     exec(table.unpack(args))

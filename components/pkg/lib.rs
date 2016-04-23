@@ -1,6 +1,8 @@
-use lua;
-use modules::ModuleTable;
-use modules::pkg::deb::*;
+extern crate flate2;
+extern crate runtime;
+extern crate tar;
+extern crate time;
+
 use runtime::Runtime;
 use std::error::Error;
 use std::fs::File;
@@ -9,12 +11,6 @@ use tar::Archive;
 
 mod ar;
 mod deb;
-
-
-pub const MTABLE: ModuleTable = ModuleTable(&[
-    ("tar", tar),
-    ("deb", deb),
-]);
 
 
 fn tar(runtime: &mut Runtime) -> i32 {
@@ -155,4 +151,15 @@ fn deb(runtime: &mut Runtime) -> i32 {
     package.write_to(&mut file);
 
     0
+}
+
+
+#[no_mangle]
+pub extern fn luaopen_pkg(ptr: *mut LuaState) -> i32 {
+    let mut runtime = Runtime::from_ptr(ptr);
+    runtime.register_lib(&[
+        ("tar", tar),
+        ("deb", deb),
+    ]);
+    1
 }

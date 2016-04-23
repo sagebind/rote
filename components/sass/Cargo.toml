@@ -1,0 +1,12 @@
+[package]
+name = "sass"
+version = "0.1.0"
+authors = ["coderstephen <me@stephencoakley.com>"]
+
+[lib]
+name = "sass"
+path = "lib.rs"
+crate-type = ["dylib"]
+
+[dependencies]
+runtime = { path = "../runtime" }

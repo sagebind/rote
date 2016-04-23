@@ -1,0 +1,13 @@
+[package]
+name = "http"
+version = "0.1.0"
+authors = ["coderstephen <me@stephencoakley.com>"]
+
+[lib]
+name = "http"
+path = "lib.rs"
+crate-type = ["dylib"]
+
+[dependencies]
+runtime = { path = "../runtime" }
+solicit = "0.4.4"

@@ -1,6 +1,3 @@
-rote = require "rote"
-
-
 __next_description = nil
 
 function task(name, deps, callback)
@@ -9,7 +6,7 @@ function task(name, deps, callback)
         deps = {}
     end
 
-    rote.create_task(name, __next_description, deps, callback)
+    create_task(name, __next_description, deps, callback)
     __next_description = nil
 end
 
@@ -19,7 +16,7 @@ function rule(pattern, deps, callback)
         deps = {}
     end
 
-    rote.create_rule(pattern, __next_description, deps, callback)
+    create_rule(pattern, __next_description, deps, callback)
     __next_description = nil
 end
 
@@ -28,5 +25,5 @@ function desc(description)
 end
 
 function default(name)
-    rote.set_default_task(name)
+    set_default_task(name)
 end

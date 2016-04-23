@@ -1,0 +1,3 @@
+local sync = {}
+
+return sync
