@@ -1,21 +1,23 @@
 extern crate filetime;
 extern crate getopts;
 extern crate glob;
-extern crate lua;
 extern crate lazysort;
 #[macro_use] extern crate log;
+extern crate regex;
 extern crate runtime;
 extern crate term;
+mod error;
+mod logger;
+mod runner;
+mod stdlib;
 
+use error::Die;
 use getopts::Options;
 use lazysort::SortedBy;
 use std::env;
 use std::fs;
 use std::path;
 use std::process;
-
-mod logger;
-mod runner;
 
 
 /// Prints the program usage to the console.

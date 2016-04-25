@@ -1,12 +1,12 @@
 use iter::TableIterator;
 use lua::{self, ffi};
 use std::clone;
-use std::error::Error as StdError;
+use std::error::Error;
 use std::mem;
 
 
 /// Results that are returned by functions callable from Lua.
-pub type RuntimeResult = Result<i32, Box<StdError>>;
+pub type RuntimeResult = Result<i32, Box<Error>>;
 
 /// A function that can be bound to be callable inside the Lua runtime.
 pub type Function = fn(Runtime) -> RuntimeResult;
@@ -65,7 +65,7 @@ impl Runtime {
     }
 
     /// Loads a project script.
-    pub fn load(&mut self, filename: &str) -> Result<(), Box<StdError>> {
+    pub fn load(&mut self, filename: &str) -> Result<(), Box<Error>> {
         // Load the given file.
         let result = self.state.do_file(filename);
 
@@ -75,7 +75,7 @@ impl Runtime {
                 return Err(format!("the file \"{}\" could not be read", filename.to_string()).into());
             }
             _ => {
-                return Err(self.get_last_error().unwrap());
+                return Err(self.state.to_str(-1).unwrap().into());
             }
         };
 
@@ -83,9 +83,9 @@ impl Runtime {
     }
 
     /// Evaluates a Lua string inside the runtime.
-    pub fn eval(&mut self, code: &str) -> Result<(), Box<StdError>> {
+    pub fn eval(&mut self, code: &str) -> Result<(), Box<Error>> {
         if self.state.do_string(code).is_err() {
-            return Err(self.get_last_error().unwrap());
+            return Err(self.state.to_str(-1).unwrap().into());
         }
 
         Ok(())
@@ -158,7 +158,7 @@ impl Runtime {
             let f: Function = mem::transmute(f_raw_ptr);
 
             // Invoke the function.
-            f(runtime.clone()).unwrap_or_else(|err: Box<StdError>| {
+            f(runtime.clone()).unwrap_or_else(|err: Box<Error>| {
                 runtime.state.location(1);
                 runtime.state.push_string(err.description());
                 runtime.state.concat(2);
@@ -171,12 +171,18 @@ impl Runtime {
         TableIterator::new(self.clone(), index)
     }
 
-    /// Gets the last error pushed on the Lua stack.
-    pub fn get_last_error(&mut self) -> Option<Box<StdError>> {
-        if self.state.is_string(-1) {
-            Some(self.state.to_str(-1).unwrap().to_string().into())
+    /// Wrapper around `lua_pcall()` that catches errors as a result.
+    pub fn call(&mut self, nargs: i32, nresults: i32, msgh: i32) -> Result<lua::ThreadStatus, Box<Error>> {
+        let status = self.state.pcall(nargs, nresults, msgh);
+
+        if status.is_err() {
+            if self.state.is_string(-1) {
+                Err(self.state.to_str(-1).unwrap().to_string().into())
+            } else {
+                Err("unknown error".into())
+            }
         } else {
-            None
+            Ok(status)
         }
     }
 

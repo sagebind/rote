@@ -1,5 +1,5 @@
-use super::Runtime;
 use lua;
+use runtime::Runtime;
 use std::any::Any;
 
 
