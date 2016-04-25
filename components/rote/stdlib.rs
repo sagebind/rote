@@ -11,7 +11,7 @@ use term;
 /// Expands global and environment variables inside a given string.
 pub fn expand_string(input: &str, runtime: Runtime) -> String {
     // Replace anything that looks like a variable expansion.
-    let pattern = Regex::new(r"\$\((\w+)\)").unwrap();
+    let pattern = Regex::new(r"\$(\w+)").unwrap();
 
     pattern.replace_all(input, |caps: &Captures| {
         let name = caps.at(1).unwrap_or("");
@@ -303,5 +303,6 @@ pub fn open_lib(mut runtime: Runtime) {
     // Define some global aliases.
     runtime.register_fn("exec", execute);
     runtime.register_fn("export", export);
+    runtime.register_fn("glob", glob);
     runtime.register_fn("print", print);
 }
