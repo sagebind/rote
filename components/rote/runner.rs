@@ -170,8 +170,8 @@ impl Runner {
         });
 
         // Set up the environment.
-        runner.runtime.add_path("./components/_modules/?.lua");
-        runner.runtime.add_cpath("./components/?/target/debug/lib?.so");
+        runner.runtime.add_path("./components/?/?.lua");
+        runner.runtime.add_cpath("./target/debug/lib?.so");
 
         // Set a pointer we can use to fetch the runner from within the runtime.
         runner.runtime.clone().reg_set("runner", &*runner as *const Runner as *mut Runner);

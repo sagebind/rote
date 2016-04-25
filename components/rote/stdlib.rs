@@ -135,7 +135,7 @@ fn execute(runtime: Runtime) -> RuntimeResult {
     }
 
     // For each other parameter given, add it as a shell argument.
-    for i in 2..runtime.state().get_top() {
+    for i in 2..runtime.state().get_top()+1 {
         // Expand each argument as we go.
         command.arg(expand_string(runtime.state().check_string(i), runtime.clone()));
     }
