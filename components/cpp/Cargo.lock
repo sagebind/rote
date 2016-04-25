@@ -1,9 +1,9 @@
 [root]
-name = "sass"
+name = "fs"
 version = "0.1.0"
 dependencies = [
+ "gcc 0.3.27 (registry+https://github.com/rust-lang/crates.io-index)",
  "runtime 0.1.0",
- "sass-rs 0.0.18 (git+https://github.com/compass-rs/sass-rs)",
 ]
 
 [[package]]
@@ -22,11 +22,6 @@ version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
-name = "libc"
-version = "0.2.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-
-[[package]]
 name = "log"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -42,33 +37,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "pkg-config"
-version = "0.3.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-
-[[package]]
 name = "runtime"
 version = "0.1.0"
 dependencies = [
  "log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "lua 0.0.8 (git+https://github.com/jcmoyer/rust-lua53)",
-]
-
-[[package]]
-name = "sass-rs"
-version = "0.0.18"
-source = "git+https://github.com/compass-rs/sass-rs#31758bb2a3f4b2a6b3386a2651deddc456a5abb9"
-dependencies = [
- "libc 0.2.10 (registry+https://github.com/rust-lang/crates.io-index)",
- "sass-sys 0.0.14 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "sass-sys"
-version = "0.0.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "libc 0.2.10 (registry+https://github.com/rust-lang/crates.io-index)",
- "pkg-config 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

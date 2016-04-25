@@ -1,8 +1,6 @@
-/// Module that provides various functions for working with files and the file system.
-#[macro_use]
 extern crate runtime;
 
-use runtime::{LuaState, Runtime};
+use runtime::{Runtime, RuntimeResult, StatePtr};
 use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io::prelude::*;
@@ -12,66 +10,66 @@ use std::io::prelude::*;
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to the file to check.
-fn exists(mut runtime: Runtime) -> i32 {
+fn exists(runtime: Runtime) -> RuntimeResult {
     let path = runtime.state().check_string(1).to_string();
 
     runtime.state().push_bool(fs::metadata(path).is_ok());
 
-    1
+    Ok(1)
 }
 
 /// Checks if a given path is a directory.
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to check.
-fn is_dir(mut runtime: Runtime) -> i32 {
+fn is_dir(runtime: Runtime) -> RuntimeResult {
     let path = runtime.state().check_string(1).to_string();
 
     let metadata = fs::metadata(path);
     runtime.state().push_bool(metadata.is_ok() && metadata.unwrap().file_type().is_dir());
 
-    1
+    Ok(1)
 }
 
 /// Checks if a given path is a file.
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to check.
-fn is_file(mut runtime: Runtime) -> i32 {
+fn is_file(runtime: Runtime) -> RuntimeResult {
     let path = runtime.state().check_string(1).to_string();
 
     let metadata = fs::metadata(path);
     runtime.state().push_bool(metadata.is_ok() && metadata.unwrap().file_type().is_file());
 
-    1
+    Ok(1)
 }
 
 /// Checks if a given path is a symbolic link.
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to check.
-fn is_symlink(mut runtime: Runtime) -> i32 {
+fn is_symlink(runtime: Runtime) -> RuntimeResult {
     let path = runtime.state().check_string(1).to_string();
 
     let metadata = fs::metadata(path);
     runtime.state().push_bool(metadata.is_ok() && metadata.unwrap().file_type().is_symlink());
 
-    1
+    Ok(1)
 }
 
 /// Creates a directory.
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to create the directory.
-fn mkdir(mut runtime: Runtime) -> i32 {
+fn mkdir(runtime: Runtime) -> RuntimeResult {
     // Get the path as the first argument.
     let path = runtime.state().check_string(1).to_string();
 
     if fs::create_dir(&path).is_err() {
-        runtime.throw_error(&format!("failed to create directory \"{}\"", path));
+        return Err(format!("failed to create directory \"{}\"", path).into());
     }
 
-    0
+    Ok(0)
 }
 
 /// Copies a file to another location.
@@ -79,15 +77,15 @@ fn mkdir(mut runtime: Runtime) -> i32 {
 /// # Lua arguments
 /// * `source: string`          - Path of the file to copy.
 /// * `dest: string`            - Path to copy the file to.
-fn copy(mut runtime: Runtime) -> i32 {
+fn copy(runtime: Runtime) -> RuntimeResult {
     let source = runtime.state().check_string(1).to_string();
     let dest = runtime.state().check_string(2).to_string();
 
     if fs::copy(&source, dest).is_err() {
-        runtime.throw_error(&format!("failed to copy \"{}\"", source));
+        return Err(format!("failed to copy \"{}\"", source).into());
     }
 
-    0
+    Ok(0)
 }
 
 /// Moves a file from one name to another.
@@ -95,64 +93,62 @@ fn copy(mut runtime: Runtime) -> i32 {
 /// # Lua arguments
 /// * `source: string`          - Path of the file to move.
 /// * `dest: string`            - Path to move the file to.
-fn rename(mut runtime: Runtime) -> i32 {
+fn rename(runtime: Runtime) -> RuntimeResult {
     let source = runtime.state().check_string(1).to_string();
     let destination = runtime.state().check_string(2).to_string();
 
     if fs::rename(source, destination).is_err() {
-        runtime.throw_error("no such file or directory");
+        return Err("no such file or directory".into());
     }
 
-    0
+    Ok(0)
 }
 
 /// Removes a file or empty directory.
 ///
 /// # Lua arguments
 /// * `path: string`            - Path of the file or directory to remove.
-fn remove(mut runtime: Runtime) -> i32 {
+fn remove(runtime: Runtime) -> RuntimeResult {
     let path = runtime.state().check_string(1).to_string();
 
     if let Ok(metadata) = fs::metadata(&path) {
         if metadata.file_type().is_dir() {
             if fs::remove_dir_all(path).is_err() {
-                runtime.throw_error("failed to remove directory");
+                return Err("failed to remove directory".into());
             }
         } else {
             if fs::remove_file(path).is_err() {
-                runtime.throw_error("failed to remove file");
+                return Err("failed to remove file".into());
             }
         }
     }
 
-    0
+    Ok(0)
 }
 
 /// Reads an entire file and returns its contents.
 ///
 /// # Lua arguments
 /// * `path: string`            - Path of the file to read from.
-fn get(mut runtime: Runtime) -> i32 {
+fn get(runtime: Runtime) -> RuntimeResult {
     let path = runtime.state().check_string(1).to_string();
 
     let file = File::open(path);
 
     if file.is_err() {
-        runtime.throw_error("failed to open file");
-        return 0;
+        return Err("failed to open file".into());
     }
 
     let mut file = file.unwrap();
     let mut buffer = String::new();
 
     if file.read_to_string(&mut buffer).is_err() {
-        runtime.throw_error("failed to read file");
-        return 0;
+        return Err("failed to read file".into());
     }
 
     runtime.state().push_string(&buffer);
 
-    1
+    Ok(1)
 }
 
 /// Puts a string into the contents of a file.
@@ -160,7 +156,7 @@ fn get(mut runtime: Runtime) -> i32 {
 /// # Lua arguments
 /// * `path: string`            - Path to the file to write to.
 /// * `contents: string`        - The contents to write.
-fn put(mut runtime: Runtime) -> i32 {
+fn put(runtime: Runtime) -> RuntimeResult {
     let path = runtime.state().check_string(1).to_string();
     let contents = String::from(runtime.state().check_string(2));
 
@@ -171,16 +167,15 @@ fn put(mut runtime: Runtime) -> i32 {
                    .open(path);
 
     if file.is_err() {
-        runtime.throw_error("failed to open file");
-        return 0;
+        return Err("failed to open file".into());
     }
 
     let mut file = file.unwrap();
     if file.write_all(contents.as_bytes()).is_err() {
-        runtime.throw_error("failed to write to file");
+        return Err("failed to write to file".into());
     }
 
-    0
+    Ok(0)
 }
 
 /// Appends a string to the end of the contents of a file.
@@ -188,7 +183,7 @@ fn put(mut runtime: Runtime) -> i32 {
 /// # Lua arguments
 /// * `path: string`            - Path to the file to append to.
 /// * `contents: string`        - The contents to append.
-fn append(mut runtime: Runtime) -> i32 {
+fn append(runtime: Runtime) -> RuntimeResult {
     let path = runtime.state().check_string(1).to_string();
     let contents = String::from(runtime.state().check_string(2));
 
@@ -198,16 +193,15 @@ fn append(mut runtime: Runtime) -> i32 {
                    .open(path);
 
     if file.is_err() {
-        runtime.throw_error("failed to open file");
-        return 0;
+        return Err("failed to open file".into());
     }
 
     let mut file = file.unwrap();
     if file.write_all(contents.as_bytes()).is_err() {
-        runtime.throw_error("failed to write to file");
+        return Err("failed to write to file".into());
     }
 
-    0
+    Ok(0)
 }
 
 /// Combines the contents of two or more files into a new, single file.
@@ -215,10 +209,9 @@ fn append(mut runtime: Runtime) -> i32 {
 /// # Lua arguments
 /// * `sources: table`          - A list of source files to combine.
 /// * `dest: string`            - The path to the output file.
-fn combine(mut runtime: Runtime) -> i32 {
+fn combine(mut runtime: Runtime) -> RuntimeResult {
     if !runtime.state().is_table(1) {
-        runtime.throw_error("first argument must be a table");
-        return 0;
+        return Err("first argument must be a table".into());
     }
 
     // Open the output file for writing.
@@ -230,8 +223,7 @@ fn combine(mut runtime: Runtime) -> i32 {
                        .open(&dest);
 
     if out_file.is_err() {
-        runtime.throw_error(&format!("failed to open file \"{}\"", dest));
-        return 0;
+        return Err(format!("failed to open file \"{}\"", dest).into());
     }
 
     let mut out_file = out_file.unwrap();
@@ -242,8 +234,7 @@ fn combine(mut runtime: Runtime) -> i32 {
 
         let in_file = File::open(&source);
         if in_file.is_err() {
-            runtime.throw_error(&format!("failed to open file \"{}\"", source));
-            return 0;
+            return Err(format!("failed to open file \"{}\"", source).into());
         }
 
         // Read the source file's contents.
@@ -251,22 +242,21 @@ fn combine(mut runtime: Runtime) -> i32 {
         let mut buffer = String::new();
 
         if in_file.read_to_string(&mut buffer).is_err() {
-            runtime.throw_error(&format!("failed to read file \"{}\"", source));
-            return 0;
+            return Err(format!("failed to read file \"{}\"", source).into());
         }
 
         // Write the source file contents into the output file.
         if out_file.write_all(buffer.as_bytes()).is_err() {
-            runtime.throw_error(&format!("failed to write to file \"{}\"", dest));
-            return 0;
+            return Err(format!("failed to write to file \"{}\"", dest).into());
         }
     }
 
-    0
+    Ok(0)
 }
 
+
 #[no_mangle]
-pub extern fn luaopen_fs(ptr: *mut LuaState) -> i32 {
+pub unsafe extern fn luaopen_fs(ptr: StatePtr) -> i32 {
     let mut runtime = Runtime::from_ptr(ptr);
     runtime.register_lib(&[
         ("exists", exists),

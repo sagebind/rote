@@ -1,7 +1,7 @@
-use runtime::error::Error;
+use ar;
 use flate2::Compression;
 use flate2::write::GzEncoder;
-use pkg::ar;
+use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
@@ -247,21 +247,21 @@ impl PackageBuilder {
     /// Attempts to build a package object from the current data.
     ///
     /// If the required fields have not been set, an error will be returned.
-    pub fn build(self) -> Result<Package, Error> {
+    pub fn build(self) -> Result<Package, Box<Error>> {
         if self.name.is_none() {
-            return Err(Error::OptionMissing("the package name must be specified".to_string()));
+            return Err("the package name must be specified".into());
         }
 
         if self.maintainer.is_none() {
-            return Err(Error::OptionMissing("the package maintainer must be specified".to_string()));
+            return Err("the package maintainer must be specified".into());
         }
 
         if self.version.is_none() {
-            return Err(Error::OptionMissing("the package version must be specified".to_string()));
+            return Err("the package version must be specified".into());
         }
 
         if self.short_desc.is_none() {
-            return Err(Error::OptionMissing("the package short description must be specified".to_string()));
+            return Err("the package short description must be specified".into());
         }
 
         Ok(Package {

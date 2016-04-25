@@ -2,18 +2,18 @@ extern crate flate2;
 extern crate runtime;
 extern crate tar;
 extern crate time;
+mod ar;
+mod deb;
 
-use runtime::Runtime;
-use std::error::Error;
+use deb::*;
+use runtime::{Runtime, RuntimeResult, StatePtr};
+use runtime::lua;
 use std::fs::File;
 use std::path::Path;
 use tar::Archive;
 
-mod ar;
-mod deb;
 
-
-fn tar(runtime: &mut Runtime) -> i32 {
+fn tar(mut runtime: Runtime) -> RuntimeResult {
     let path = runtime.state().check_string(1).to_string();
     runtime.state().check_type(2, lua::Type::Table);
 
@@ -24,19 +24,18 @@ fn tar(runtime: &mut Runtime) -> i32 {
         let input_file: String = item.value().unwrap();
 
         if archive.append_path(input_file).is_err() {
-            runtime.throw_error("failed to create tar archive");
-            return 0;
+            return Err("failed to create tar archive".into());
         }
     }
 
     if archive.finish().is_err() {
-        runtime.throw_error("failed to create tar archive");
+        return Err("failed to create tar archive".into());
     }
 
-    0
+    Ok(0)
 }
 
-fn deb(runtime: &mut Runtime) -> i32 {
+fn deb(mut runtime: Runtime) -> RuntimeResult {
     runtime.state().check_type(1, lua::Type::Table);
 
     let mut builder = PackageBuilder::new();
@@ -135,27 +134,20 @@ fn deb(runtime: &mut Runtime) -> i32 {
     }
 
     if file.is_none() {
-        runtime.throw_error("no file name specified");
-        return 0;
+        return Err("no file name specified".into());
     }
 
     let mut file = File::create(file.unwrap()).unwrap();
 
-    let package = builder.build();
-    if let Err(error) = package {
-        runtime.throw_error(error.description());
-        return 0;
-    }
-    let package = package.unwrap();
-
+    let package = try!(builder.build());
     package.write_to(&mut file);
 
-    0
+    Ok(0)
 }
 
 
 #[no_mangle]
-pub extern fn luaopen_pkg(ptr: *mut LuaState) -> i32 {
+pub unsafe extern fn luaopen_pkg(ptr: StatePtr) -> i32 {
     let mut runtime = Runtime::from_ptr(ptr);
     runtime.register_lib(&[
         ("tar", tar),

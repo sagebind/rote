@@ -1,25 +1,53 @@
-require "cargo"
-require "fs"
-require "pkg"
+cargo = require "cargo"
+fs = require "fs"
+pkg = require "pkg"
+busted = require "busted"
 default "debug"
 
+
+-- Supported platform targets
+targets = {
+    "i686-unknown-linux-gnu",
+    "x86_64-unknown-linux-gnu",
+    "x86_64-pc-windows-gnu",
+}
+
+task("build-finish", function()
+    print "Build finished!"
+end)
 
 desc("Build a debug binary")
 task("debug", function()
     print "Building debug version..."
-    cargo.build()
+    cargo.build {
+        flags = {"-Clink-args=-export-dynamic"}
+    }
 end)
 
-desc("Build a release binary")
+desc("Build a release binary for all supported platforms")
 task("release", function()
-    cargo.build {
-        release = true
-    }
+    for i, target in ipairs(targets) do
+        print(target)
+        cargo.build {
+            release = true,
+            target = target,
+        }
+    end
 end)
 
 desc("Clean the project directory")
 task("clean", function()
-    cargo.clean()
+    fs.remove("./target")
+end)
+
+desc("Update locked dependencies")
+task("update", function()
+    for i, path in ipairs(glob(rote.current_dir() .. "/components/*")) do
+        if fs.is_dir(path) and fs.is_file(path .. "/Cargo.toml") then
+            rote.change_dir(path)
+            cargo.update()
+        end
+    end
 end)
 
 desc("Build a Debian binary package")

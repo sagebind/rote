@@ -1,5 +1,5 @@
 [package]
-name = "sass"
+name = "docker"
 version = "0.1.0"
 authors = ["coderstephen <me@stephencoakley.com>"]
 
@@ -9,4 +9,4 @@ crate-type = ["dylib"]
 
 [dependencies]
 runtime = { path = "../runtime" }
-sass-rs = { git = "https://github.com/compass-rs/sass-rs" }
+docker = "0.0.41"

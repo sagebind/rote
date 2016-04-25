@@ -1,16 +1,13 @@
+extern crate runtime;
 extern crate solicit;
 
-use modules::ModuleTable;
-use runtime::Runtime;
+use runtime::{Runtime, RuntimeResult, StatePtr};
 use solicit::http::client::CleartextConnector;
 use solicit::client::SimpleClient;
 
 
-pub const MTABLE: ModuleTable = ModuleTable(&[
-    ("get", get)
-]);
-
-fn get(runtime: &mut Runtime) -> i32 {
+/// Downloads a file.
+fn download(runtime: Runtime) -> RuntimeResult {
     let url = runtime.state().check_string(1).to_string();
 
     let connector = CleartextConnector::new("http2bin.org");
@@ -21,5 +18,17 @@ fn get(runtime: &mut Runtime) -> i32 {
         if status != 200 {}
     }
 
-    0
+    Ok(0)
+}
+
+
+#[no_mangle]
+pub unsafe extern fn luaopen_http(ptr: StatePtr) -> i32 {
+    let mut runtime = Runtime::from_ptr(ptr);
+
+    runtime.register_lib(&[
+        ("download", download),
+    ]);
+
+    1
 }
