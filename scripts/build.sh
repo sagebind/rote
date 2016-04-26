@@ -3,14 +3,12 @@
 
 export CARGO_TARGET_DIR=./target
 
-# Build all of the crates.
-for component in ./components/*; do
-    if [ ! -d $component ]; then
-        continue
-    fi
 
-    crate=$(basename $component)
-    manifest=$component/Cargo.toml
+build-crate() {
+    local path=$1
+    shift
+    local crate=$(basename $path)
+    local manifest=$path/Cargo.toml
 
     if [ ! -f $manifest ]; then
         echo "No manifest file for component '$crate', skipping"
@@ -18,9 +16,33 @@ for component in ./components/*; do
     fi
 
     echo "Building crate '$crate'..."
-    cargo build --manifest-path $manifest "$@" || exit
+    local cmd="cargo rustc --manifest-path $manifest -- -C rpath $@"
+    echo "   $cmd"
+    eval $cmd || exit
     echo
+}
+
+
+# First build the core runtime library, since all other crates depend on it.
+build-crate components/runtime -C prefer-dynamic
+libs=(target/debug/deps/*.so)
+rm $libs
+
+# Build all of the remaining crates.
+for component in components/*; do
+    if [ ! -d $component ]; then
+        continue
+    fi
+
+    # Skip runtime...
+    if [ $(basename $component) = "runtime" ]; then
+        continue
+    fi
+
+    # Build it
+    build-crate $component --extern runtime=target/debug/libruntime.so
 done
+
 
 rote_bin=$CARGO_TARGET_DIR/debug/rote
 

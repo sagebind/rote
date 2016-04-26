@@ -8,5 +8,4 @@ path = "lib.rs"
 crate-type = ["dylib"]
 
 [dependencies]
-runtime = { path = "../runtime" }
 docker = "0.0.41"

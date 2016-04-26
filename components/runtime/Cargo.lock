@@ -2,7 +2,6 @@
 name = "runtime"
 version = "0.1.0"
 dependencies = [
- "log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "lua 0.0.8 (git+https://github.com/jcmoyer/rust-lua53)",
 ]
 
@@ -19,11 +18,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "libc"
 version = "0.1.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-
-[[package]]
-name = "log"
-version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]

@@ -8,4 +8,4 @@ path = "lib.rs"
 crate-type = ["dylib"]
 
 [dependencies]
-runtime = { path = "../runtime" }
+#runtime = { path = "../runtime" }

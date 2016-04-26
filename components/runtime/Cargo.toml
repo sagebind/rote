@@ -5,8 +5,7 @@ authors = ["coderstephen <me@stephencoakley.com>"]
 
 [lib]
 path = "lib.rs"
-crate-type = ["rlib"]
+crate-type = ["dylib"]
 
 [dependencies]
-log = "0.3"
 lua = { git = "https://github.com/jcmoyer/rust-lua53" }

@@ -8,5 +8,4 @@ path = "lib.rs"
 crate-type = ["dylib"]
 
 [dependencies]
-runtime = { path = "../runtime" }
 solicit = "0.4.4"

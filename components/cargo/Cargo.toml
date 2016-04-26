@@ -6,6 +6,3 @@ authors = ["coderstephen <me@stephencoakley.com>"]
 [lib]
 path = "lib.rs"
 crate-type = ["dylib"]
-
-[dependencies]
-runtime = { path = "../runtime" }

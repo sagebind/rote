@@ -2,11 +2,11 @@ extern crate docker;
 extern crate runtime;
 
 use docker::Docker;
-use runtime::{Runtime, StatePtr};
+use runtime::{Runtime, RuntimeResult, StatePtr};
 
 
-pub fn build(mut runtime: Runtime) -> i32 {
-    0
+pub fn build(mut runtime: Runtime) -> RuntimeResult {
+    Ok(0)
 }
 
 
