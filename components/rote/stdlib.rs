@@ -4,6 +4,7 @@ use regex::{Captures, Regex};
 use runtime::lua;
 use runtime::{Runtime, RuntimeResult};
 use std::env;
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use term;
 
@@ -184,32 +185,55 @@ fn export(runtime: Runtime) -> RuntimeResult {
 ///
 /// # Lua arguments
 /// * `pattern: string` - The glob pattern to match.
-fn glob(runtime: Runtime) -> RuntimeResult {
+fn glob(mut runtime: Runtime) -> RuntimeResult {
     // Get the pattern as the first argument.
     let pattern = runtime.state().check_string(1).to_string();
+
+    // Make the pattern absolute if it isn't already.
+    let mut full_path = PathBuf::from(pattern);
+    if full_path.is_relative() {
+        let path = full_path;
+        full_path = env::current_dir().unwrap();
+        full_path.push(&path);
+    }
 
     // Create a table of values to return.
     runtime.state().new_table();
 
-    // Match the pattern and push the results onto the stack.
-    let mut index = 1;
-    for entry in glob::glob(&pattern).unwrap() {
-        match entry {
-            Ok(path) => {
-                // Push the path onto the return value list.
-                runtime.state().push(path.to_str().unwrap());
-                runtime.state().raw_seti(2, index);
+    // Get an iterator for the glob result and return a Lua iterator.
+    if let Ok(mut iter) = glob::glob(&full_path.to_str().unwrap()) {
+        runtime.push_closure(Box::new(move |runtime: Runtime| {
+            loop {
+                match iter.next() {
+                    Some(Ok(path)) => {
+                        // Turn the path into a string.
+                        if let Some(path) = path.to_str() {
+                            // Push the path onto the return value list.
+                            runtime.state().push(path);
+                            return Ok(1);
+                        } else {
+                            warn!("bad characters in path from glob");
+                        }
+                    }
+                    Some(Err(_)) => {
+                        // if the path matched but was unreadable,
+                        // thereby preventing its contents from matching
+                        warn!("unreadable path in glob");
+                        // just continue the loop until we find a path we care about
+                    }
+                    None => {
+                        trace!("reached end of iterator");
+                        runtime.state().push_nil();
+                        return Ok(1);
+                    }
+                }
             }
-
-            // if the path matched but was unreadable,
-            // thereby preventing its contents from matching
-            Err(_) => {}
-        }
-
-        index += 1;
+        }));
+        Ok(1)
+    } else {
+        warn!("invalid glob pattern");
+        Ok(0)
     }
-
-    Ok(1)
 }
 
 /// Parses an input table of options and merges it with a table of default values.
@@ -276,7 +300,7 @@ fn set_default_task(mut runtime: Runtime) -> RuntimeResult {
 
 /// Returns the current version of Rote as a string.
 fn version(runtime: Runtime) -> RuntimeResult {
-    runtime.state().push_string(env!("CARGO_PKG_VERSION"));
+    runtime.state().push_string(::ROTE_VERSION);
     Ok(1)
 }
 

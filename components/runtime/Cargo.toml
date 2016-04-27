@@ -8,4 +8,5 @@ path = "lib.rs"
 crate-type = ["dylib"]
 
 [dependencies]
+libc = "0.1"
 lua = { git = "https://github.com/jcmoyer/rust-lua53" }

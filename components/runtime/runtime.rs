@@ -1,8 +1,10 @@
 use iter::TableIterator;
+use libc::{c_int, c_void};
 use lua::{self, ffi};
 use std::clone;
 use std::error::Error;
 use std::mem;
+use std::path::Path;
 
 
 /// Results that are returned by functions callable from Lua.
@@ -10,6 +12,7 @@ pub type RuntimeResult = Result<i32, Box<Error>>;
 
 /// A function that can be bound to be callable inside the Lua runtime.
 pub type Function = fn(Runtime) -> RuntimeResult;
+pub type Closure = Box<FnMut(Runtime) -> RuntimeResult>;
 
 /// A Lua script runtime for parsing and executing build script functions.
 pub struct Runtime {
@@ -64,15 +67,19 @@ impl Runtime {
         }
     }
 
-    /// Loads a project script.
-    pub fn load(&mut self, filename: &str) -> Result<(), Box<Error>> {
-        // Load the given file.
-        let result = self.state.do_file(filename);
+    /// Executes a Lua script.
+    pub fn load(&mut self, path: &Path) -> Result<(), Box<Error>> {
+        let path_str = if let Some(s) = path.to_str() {
+            s
+        } else {
+            return Err("path contains invalid characters".into());
+        };
 
-        match result {
+        // Load the given file.
+        match self.state.do_file(path_str) {
             lua::ThreadStatus::Ok => { }
             lua::ThreadStatus::FileError => {
-                return Err(format!("the file \"{}\" could not be read", filename.to_string()).into());
+                return Err(format!("the file \"{}\" could not be read", path_str).into());
             }
             _ => {
                 return Err(self.state.to_str(-1).unwrap().into());
@@ -139,34 +146,68 @@ impl Runtime {
     }
 
     /// Pushes a safe Rust function onto the stack.
-    pub fn push_fn(&mut self, f: Function) {
+    pub fn push_fn(&mut self, function: Function) {
         // First push a pointer to the given function so that we know what function to delegate to.
         unsafe {
-            self.state.push_light_userdata(f as *mut usize);
+            self.state.push_light_userdata(function as *mut c_void);
         }
 
         // Push a wrapper function onto the stack, which delegates to the given function.
         self.state.push_closure(Some(fn_wrapper), 1);
 
         // Wrapper function for invoking Rust functions from inside Lua.
-        unsafe extern fn fn_wrapper(ptr: *mut ffi::lua_State) -> i32 {
+        unsafe extern fn fn_wrapper(ptr: *mut ffi::lua_State) -> c_int {
             // Get the runtime from the raw pointer.
             let mut runtime = Runtime::from_ptr(ptr);
 
             // Get the raw pointer and turn it back into a Rust function pointer.
-            let f_raw_ptr = runtime.state.to_userdata(ffi::lua_upvalueindex(1)) as *mut usize;
-            let f: Function = mem::transmute(f_raw_ptr);
+            let raw_ptr = runtime.state.to_userdata(ffi::lua_upvalueindex(1));
+            let function: Function = mem::transmute(raw_ptr);
 
             // Invoke the function.
-            f(runtime.clone()).unwrap_or_else(|err: Box<Error>| {
+            function(runtime.clone()).unwrap_or_else(|err: Box<Error>| {
                 runtime.state.location(1);
                 runtime.state.push_string(err.description());
                 runtime.state.concat(2);
                 runtime.state.error();
-            })
+            }) as c_int
         }
     }
 
+    /// Pushes a safe Rust closure onto the stack.
+    ///
+    /// Note that this currently leaks memory as there is no way to cleanup resources, so it should be used sparingly.
+    pub fn push_closure(&mut self, closure: Closure) {
+        let cb = Box::new(closure);
+
+        // First push a pointer to the closure so that we know what to delegate to.
+        unsafe {
+            self.state.push_light_userdata(Box::into_raw(cb) as *mut c_void);
+        }
+
+        // Push a wrapper function onto the stack, which delegates to the given function.
+        self.state.push_closure(Some(fn_wrapper), 1);
+
+        // Wrapper function for invoking Rust functions from inside Lua.
+        unsafe extern fn fn_wrapper(ptr: *mut ffi::lua_State) -> c_int {
+            // Get the runtime from the raw pointer.
+            let mut runtime = Runtime::from_ptr(ptr);
+
+            // Get the raw pointer and turn it back into a Rust closure pointer.
+            let raw_ptr = runtime.state.to_userdata(ffi::lua_upvalueindex(1));
+            let closure: &mut Closure = mem::transmute(raw_ptr);
+
+            // Invoke the closure.
+            closure(runtime.clone()).unwrap_or_else(|err: Box<Error>| {
+                runtime.state.location(1);
+                runtime.state.push_string(err.description());
+                runtime.state.concat(2);
+                runtime.state.error();
+            }) as c_int
+        }
+    }
+
+    /// Returns an iterator for iterating over the table at the top of the stack.
     pub fn iter(&mut self, index: lua::Index) -> TableIterator {
         TableIterator::new(self.clone(), index)
     }

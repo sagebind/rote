@@ -6,6 +6,7 @@ use std::collections::{HashMap, LinkedList};
 use std::error::Error as StdError;
 use error::Error;
 use std::fs;
+use std::path::Path;
 use std::rc::Rc;
 use stdlib;
 
@@ -183,7 +184,7 @@ impl Runner {
         });
         runner.runtime.state().set_global("OS");
 
-        // Load the Rote standard library.
+        trace!("opening standard module...");
         stdlib::open_lib(runner.runtime.clone());
         try!(runner.runtime.eval(include_str!("dsl.lua")));
 
@@ -192,6 +193,7 @@ impl Runner {
 
     /// Gets a reference to the runner that belongs to a given runtime.
     pub fn from_runtime<'a>(mut runtime: Runtime) -> &'a mut Self {
+        trace!("fetching pointer to runner from registry");
         runtime.reg_get("runner").unwrap()
     }
 
@@ -263,8 +265,8 @@ impl Runner {
     }
 
     /// Loads a build file script.
-    pub fn load(&mut self, filename: &str) -> Result<(), Box<Error>> {
-        self.runtime.load(filename).map_err(|err: Box<StdError>| {
+    pub fn load(&mut self, path: &Path) -> Result<(), Box<Error>> {
+        self.runtime.load(path).map_err(|err: Box<StdError>| {
             err.into()
         })
     }
@@ -289,15 +291,16 @@ impl Runner {
         if let Some(task) = self.get_task(&name) {
             let satisfied = task.borrow().is_satisfied();
             if !satisfied {
+                debug!("task not satisfied, running dependencies");
                 try!(self.resolve_dependencies(&task.borrow().deps));
 
                 if !self.dry_run {
                     try!(task.borrow_mut().run(args));
                 } else {
-                    println!("Would run task \"{}\".", &name);
+                    info!("would run task \"{}\".", &name);
                 }
             } else {
-                println!("Nothing to be done for task \"{}\".", &name);
+                info!("nothing to be done for task \"{}\".", &name);
             }
         } else if let Some(rule) = self.match_rule(&name) {
             if !rule.is_satisfied(&name) {
@@ -306,12 +309,12 @@ impl Runner {
                 if !self.dry_run {
                     try!(rule.run(&name));
                 } else {
-                    println!("Would run rule \"{}\" for file \"{}\".",
+                    info!("would run rule \"{}\" for file \"{}\".",
                              &rule.pattern,
                              &name);
                 }
             } else {
-                println!("Nothing to be done for file \"{}\".", &name);
+                info!("nothing to be done for file \"{}\".", &name);
             }
         } else {
             return Err(Error::TaskNotFound(name).into());

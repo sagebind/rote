@@ -1,3 +1,4 @@
+extern crate libc;
 pub extern crate lua;
 mod iter;
 mod runtime;
