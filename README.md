@@ -28,16 +28,21 @@ For more insulting comparisons to your favorite tool, here is a lengthier list:
 - CMake? lol.
 
 
-## Goals
-- Completely portable binary with very few system dependencies.
+## Features
+- Ridiculously fast.
+- Scriptable runtime.
 - Familiar syntax that doesn't get in your way when you need to do some logic in your build.
+
+
+## Goals
+- Completely portable binary with no system dependencies.
 - Build parallelization with threading.
 
 
 ## Compiling
-Unfortunately, Rote can't build itself yet. For now, you can build it with Cargo:
+Rote comes with some shell scripts to orchestrate building. If only there was a good build tool we could use instead...
 
-    cargo build
+    ./scripts/build.sh
 
 This will compile Rote along with a downloaded Lua 5.3 interpreter.
 
@@ -68,7 +73,7 @@ Now to execute the `debug` task, we can run `rote debug`. Rote will look for the
 
     rote -f my/Rotefile debug
 
-See the `default "debug"` at the end of the file? That sets the default task to `debug`. When `rote` is run without a task name, it assumes the "default" task should be run. To run the "debug" task then, we can just run
+See the `default "debug"` near the top? That sets the default task to `debug`. When `rote` is run without a task name, it assumes the "default" task should be run. To run the "debug" task then, we can just run
 
     rote
 
@@ -92,7 +97,7 @@ See `rote -h` for more on command usage.
 
 
 ## Batteries included
-Since your task runner and build tool typically runs before your depency managers, it makes little sense for you to have to install a plethora of plugins before running tasks. That's why Rote includes many common tasks built-in directly; Rote comes batteries included.
+Since your task runner and build tool typically runs before your dependency managers, it makes little sense for you to have to install a plethora of plugins before running tasks. That's why Rote includes many common tasks built-in directly; Rote comes batteries included.
 
 If there is a reusable component you'd like to use, but keep out of your actual `Rotefile`, you can save it as a simple Lua module too inside your project repository, or in one of your system's Lua include paths. Then using it in your `Rotefile` is as simple as requiring the module by name:
 
