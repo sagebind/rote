@@ -16,8 +16,7 @@ build-crate() {
     fi
 
     echo -e "Building crate \033[1m$crate\033[0m..."
-    cargo build --manifest-path $manifest $@
-    eval $cmd || exit
+    cargo build --manifest-path $manifest $@ || exit
     echo
 }
 
