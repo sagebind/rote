@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds Rote from scratch.
 
-export CARGO_TARGET_DIR=./target
+export CARGO_TARGET_DIR=target
 
 
 build-crate() {
@@ -11,30 +11,29 @@ build-crate() {
     local manifest=$path/Cargo.toml
 
     if [ ! -f $manifest ]; then
-        echo "No manifest file for component '$crate', skipping"
+        echo -e "No manifest file for component \033[1m$crate\033[0m, skipping\n"
         continue
     fi
 
-    echo "Building crate '$crate'..."
-    local cmd="cargo rustc --manifest-path $manifest -- $@"
-    echo "   $cmd"
-    export BUILD_TIME=$(date)
+    echo -e "Building crate \033[1m$crate\033[0m..."
+    cargo build --manifest-path $manifest $@
     eval $cmd || exit
     echo
 }
 
+TIMEFORMAT='All components built in %lR.'
+time {
+    # Build all of the remaining crates.
+    for component in components/*; do
+        if [ ! -d $component ]; then
+            continue
+        fi
 
-# Build all of the remaining crates.
-for component in components/*; do
-    if [ ! -d $component ]; then
-        continue
-    fi
+        # Build it
+        build-crate $component $@
+    done
+}
 
-    # Skip runtime...
-    if [ $(basename $component) = "runtime" ]; then
-        continue
-    fi
-
-    # Build it
-    build-crate $component
-done
+echo -e "\033[1m┬─┐┌─┐┌┬┐┌─┐  ┬┌─┐  ┬─┐┌─┐┌─┐┌┬┐┬ ┬  ┌┬┐┌─┐  ┬─┐┌─┐┬  ┬  ┬
+├┬┘│ │ │ ├┤   │└─┐  ├┬┘├┤ ├─┤ ││└┬┘   │ │ │  ├┬┘│ ││  │  │
+┴└─└─┘ ┴ └─┘  ┴└─┘  ┴└─└─┘┴ ┴─┴┘ ┴    ┴ └─┘  ┴└─└─┘┴─┘┴─┘o\033[0m"

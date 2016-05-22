@@ -5,34 +5,20 @@ busted = require "busted"
 default "debug"
 
 
--- Supported platform targets
-targets = {
-    "i686-unknown-linux-gnu",
-    "x86_64-unknown-linux-gnu",
-    "x86_64-pc-windows-gnu",
-}
-
-task("build-finish", function()
-    print "Build finished!"
+desc("Build a debug binary")
+task("debug", {"target/debug/rote"}, function()
 end)
 
-desc("Build a debug binary")
-task("debug", function()
-    print "Building debug version..."
-    cargo.build {
-        flags = {"-Clink-args=-export-dynamic"}
-    }
+rule("target/debug/rote", function()
+    exec("./scripts/build.sh")
 end)
 
 desc("Build a release binary for all supported platforms")
-task("release", function()
-    for i, target in ipairs(targets) do
-        print(target)
-        cargo.build {
-            release = true,
-            target = target,
-        }
-    end
+task("release", {"target/release/rote"}, function()
+end)
+
+rule("target/release/rote", function()
+    exec("./scripts/build.sh", "--release")
 end)
 
 desc("Clean the project directory")
@@ -42,7 +28,7 @@ end)
 
 desc("Update locked dependencies")
 task("update", function()
-    for i, path in ipairs(glob(rote.current_dir() .. "/components/*")) do
+    for path in glob("components/*") do
         if fs.is_dir(path) and fs.is_file(path .. "/Cargo.toml") then
             rote.change_dir(path)
             cargo.update()
@@ -52,10 +38,19 @@ end)
 
 desc("Build a Debian binary package")
 task("deb", {"target/release/rote"}, function()
+    local files = {
+        ["usr/bin/rote"] = "target/release/rote",
+    }
+
+    for path in glob("target/release/lib*.so") do
+        local file = path:match(".*/(.*)")
+        files["usr/lib/rote/" .. file] = path
+    end
+
     pkg.deb {
         output = "target/release/rote.deb",
         name = "rote",
-        version = cargo.info().version,
+        version = cargo.info("components/rote/Cargo.toml").version,
         arch = "amd64",
         maintainer = "Stephen Coakley <me@stephencoakley.com>",
         description = "Plain and simple task and build tool",
@@ -65,15 +60,13 @@ task("deb", {"target/release/rote"}, function()
             libc6 = ">= 2.21",
             libgcc1 = ">= 5.0",
         },
-        files = {
-            ["usr/bin/rote"] = "target/release/rote",
-        },
+        files = files,
     }
 end)
 
 desc("Runs tests")
 task("test", function()
-    for _, file in ipairs(glob("tests/*.lua")) do
+    for file in glob("tests/*.lua") do
         print("[" .. file .. "]")
         local success, err = pcall(function()
             return dofile(file)
