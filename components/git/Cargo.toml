@@ -9,3 +9,4 @@ crate-type = ["dylib"]
 
 [dependencies]
 git2 = "*"
+runtime = { path = "../runtime" }

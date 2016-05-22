@@ -13,6 +13,7 @@ glob = "0.2"
 lazysort = "0.1"
 log = "0.3"
 regex = "0.1"
+runtime = { path = "../runtime" }
 term = "0.2"
 
 [[bin]]

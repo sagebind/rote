@@ -5,7 +5,6 @@ authors = ["coderstephen <me@stephencoakley.com>"]
 
 [lib]
 path = "lib.rs"
-crate-type = ["dylib"]
 
 [dependencies]
 libc = "0.1"

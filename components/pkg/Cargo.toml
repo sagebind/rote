@@ -9,5 +9,6 @@ crate-type = ["dylib"]
 
 [dependencies]
 flate2 = "0.2"
+runtime = { path = "../runtime" }
 tar = "0.3.2"
 time = "0.1"

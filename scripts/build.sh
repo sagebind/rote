@@ -16,17 +16,13 @@ build-crate() {
     fi
 
     echo "Building crate '$crate'..."
-    local cmd="cargo rustc --manifest-path $manifest -- -C rpath $@"
+    local cmd="cargo rustc --manifest-path $manifest -- $@"
     echo "   $cmd"
+    export BUILD_TIME=$(date)
     eval $cmd || exit
     echo
 }
 
-
-# First build the core runtime library, since all other crates depend on it.
-build-crate components/runtime -C prefer-dynamic
-libs=(target/debug/deps/*.so)
-rm $libs
 
 # Build all of the remaining crates.
 for component in components/*; do
@@ -40,16 +36,5 @@ for component in components/*; do
     fi
 
     # Build it
-    build-crate $component --extern runtime=target/debug/libruntime.so
+    build-crate $component
 done
-
-
-rote_bin=$CARGO_TARGET_DIR/debug/rote
-
-# Now that the binary is built, and the necessary modules, use Rote to finish the build process.
-if [ ! -f $rote_bin ]; then
-    echo "Build failed: could not find intermediate Rote binary"
-    exit 1
-fi
-
-eval $rote_bin build-finish
