@@ -261,7 +261,7 @@ fn options(runtime: Runtime) -> RuntimeResult {
 /// # Lua arguments
 /// * `str: string` - The string to print.
 fn print(runtime: Runtime) -> RuntimeResult {
-    let runner = Runner::from_runtime(runtime.clone());
+    let runner = Runner::from_runtime(runtime.clone()).unwrap();
     let string = runtime.state().check_string(1).to_string();
     let string = expand_string(&string, runtime.clone());
     let mut out = term::stdout().unwrap();
