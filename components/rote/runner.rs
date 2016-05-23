@@ -1,10 +1,11 @@
+use error::Error;
 use filetime::FileTime;
 use runtime::lua;
 use runtime::Runtime;
 use std::cell::RefCell;
 use std::collections::{HashMap, LinkedList};
+use std::env;
 use std::error::Error as StdError;
-use error::Error;
 use std::fs;
 use std::path::Path;
 use std::rc::Rc;
@@ -171,8 +172,16 @@ impl Runner {
         });
 
         // Set up the environment.
-        runner.runtime.add_path("./components/?/?.lua");
-        runner.runtime.add_cpath("./target/debug/lib?.so");
+        runner.runtime.add_path("./components/?.lua");
+        runner.runtime.add_cpath("/usr/lib/rote/lib?.so");
+
+        if let Some(mut path) = env::current_exe().ok()
+            .and_then(|path| path.parent()
+                .map(|p| p.to_path_buf())
+            ) {
+            path.push("lib?.so");
+            runner.runtime.add_cpath(path.to_str().unwrap());
+        }
 
         // Set a pointer we can use to fetch the runner from within the runtime.
         runner.runtime.clone().reg_set("runner", &*runner as *const Runner as *mut Runner);
@@ -192,9 +201,9 @@ impl Runner {
     }
 
     /// Gets a reference to the runner that belongs to a given runtime.
-    pub fn from_runtime<'a>(mut runtime: Runtime) -> &'a mut Self {
+    pub fn from_runtime<'a>(mut runtime: Runtime) -> Option<&'a mut Self> {
         trace!("fetching pointer to runner from registry");
-        runtime.reg_get("runner").unwrap()
+        runtime.reg_get("runner")
     }
 
     /// Creates a new task.
