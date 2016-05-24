@@ -227,28 +227,16 @@ impl Runtime {
         }
     }
 
-    /// Gets a stored pointer value from the runtime state registry.
-    pub fn reg_get<'a, T>(&mut self, name: &str) -> Option<&'a mut T> {
-        self.state.push_string(name);
+    /// Pushes the value of a registry key onto the stack.
+    pub fn reg_get(&mut self, name: &str) {
+        self.state.push(name);
         self.state.get_table(lua::REGISTRYINDEX);
-
-        if !self.state.is_userdata(-1) {
-            return None;
-        }
-
-        unsafe {
-            let pointer = self.state.to_userdata(-1);
-            self.state.pop(1);
-            Some(mem::transmute(pointer))
-        }
     }
 
-    /// Stores a pointer value into the runtime state registry.
-    pub fn reg_set<T>(&mut self, name: &str, pointer: *mut T) {
-        self.state.push_string(name);
-        unsafe {
-            self.state.push_light_userdata(pointer);
-        }
+    /// Sets a registry key to the value at the top of the stack.
+    pub fn reg_set(&mut self, name: &str) {
+        self.state.push(name);
+        self.state.push_value(-2);
         self.state.set_table(lua::REGISTRYINDEX);
     }
 }

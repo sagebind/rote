@@ -184,7 +184,10 @@ impl Runner {
         }
 
         // Set a pointer we can use to fetch the runner from within the runtime.
-        runner.runtime.clone().reg_set("runner", &*runner as *const Runner as *mut Runner);
+        unsafe {
+            runner.runtime.clone().state().push_light_userdata(&*runner as *const Runner as *mut Runner);
+        }
+        runner.runtime.clone().reg_set("runner");
 
         runner.runtime.state().push_string(if cfg!(windows) {
             "windows"
@@ -195,15 +198,24 @@ impl Runner {
 
         trace!("opening standard module...");
         stdlib::open_lib(runner.runtime.clone());
-        try!(runner.runtime.eval(include_str!("dsl.lua")));
 
         Ok(runner)
     }
 
     /// Gets a reference to the runner that belongs to a given runtime.
-    pub fn from_runtime<'a>(mut runtime: Runtime) -> Option<&'a mut Self> {
+    pub fn from_runtime<'a>(runtime: &mut Runtime) -> Option<&'a mut Self> {
         trace!("fetching pointer to runner from registry");
-        runtime.reg_get("runner")
+        runtime.reg_get("rote.runner");
+
+        if !runtime.state().is_userdata(-1) {
+            return None;
+        }
+
+        unsafe {
+            let pointer = runtime.state().to_userdata(-1);
+            runtime.state().pop(1);
+            Some(&mut *(pointer as *mut Runner))
+        }
     }
 
     /// Creates a new task.

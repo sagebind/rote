@@ -33,6 +33,16 @@ pub fn expand_string(input: &str, runtime: Runtime) -> String {
     })
 }
 
+fn get_next_description(mut runtime: Runtime) -> Option<String> {
+    runtime.reg_get("rote.nextDescription");
+
+    if runtime.state().is_string(-1) {
+        Some(runtime.state().check_string(-1).to_string())
+    } else {
+        None
+    }
+}
+
 
 /// Sets the current working directory.
 fn change_dir(runtime: Runtime) -> RuntimeResult {
@@ -53,30 +63,27 @@ fn change_dir(runtime: Runtime) -> RuntimeResult {
 /// * `dependencies: table`  - A list of task names that the rule depends on. (Optional)
 /// * `func: function`       - A function that should be called when the rule is run. (Optional)
 fn create_rule(mut runtime: Runtime) -> RuntimeResult {
-    let runner: &mut Runner = runtime.reg_get("runner").unwrap();
+    let runner = Runner::from_runtime(&mut runtime).unwrap();
 
     let pattern = runtime.state().check_string(1).to_string();
-    let desc = if runtime.state().is_string(2) {
-        Some(runtime.state().check_string(2).to_string())
+    let desc = get_next_description(runtime.clone());
+
+    // Get the list of dependencies if given.
+    let deps = if runtime.state().type_of(2) == Some(lua::Type::Table) {
+        runtime.iter(2)
+            .map(|item| item.value().unwrap())
+            .collect()
+    } else {
+        Vec::new()
+    };
+
+    // Get the task function if given.
+    let func = if runtime.state().type_of(-1) == Some(lua::Type::Function) {
+        // Get a portable reference to the task function.
+        Some(runtime.state().reference(lua::REGISTRYINDEX))
     } else {
         None
     };
-
-    // Read the dependency table.
-    runtime.state().check_type(3, lua::Type::Table);
-    let deps: Vec<String> = runtime.iter(3)
-        .map(|item| item.value().unwrap())
-        .collect();
-
-    // Third argument is the task function.
-    let func = runtime.state().type_of(4).and_then(|t| {
-        if t == lua::Type::Function {
-            // Get a portable reference to the task function.
-            Some(runtime.state().reference(lua::REGISTRYINDEX))
-        } else {
-            None
-        }
-    });
 
     runner.create_rule(pattern, desc, deps, func);
     Ok(0)
@@ -90,23 +97,22 @@ fn create_rule(mut runtime: Runtime) -> RuntimeResult {
 /// * `dependencies: table`  - A list of task names that the task depends on. (Optional)
 /// * `func: function`       - A function that should be called when the task is run.
 fn create_task(mut runtime: Runtime) -> RuntimeResult {
-    let runner: &mut Runner = runtime.reg_get("runner").unwrap();
+    let runner = Runner::from_runtime(&mut runtime).unwrap();
 
     let name = runtime.state().check_string(1).to_string();
-    let desc = if runtime.state().is_string(2) {
-        Some(runtime.state().check_string(2).to_string())
+    let desc = get_next_description(runtime.clone());
+
+    // Get the list of dependencies if given.
+    let deps = if runtime.state().type_of(2) == Some(lua::Type::Table) {
+        runtime.iter(2)
+            .map(|item| item.value().unwrap())
+            .collect()
     } else {
-        None
+        Vec::new()
     };
 
-    // Read the dependency table.
-    runtime.state().check_type(3, lua::Type::Table);
-    let deps: Vec<String> = runtime.iter(3)
-        .map(|item| item.value().unwrap())
-        .collect();
-
     // Get a portable reference to the task function.
-    runtime.state().check_type(4, lua::Type::Function);
+    runtime.state().check_type(-1, lua::Type::Function);
     let func = runtime.state().reference(lua::REGISTRYINDEX);
 
     runner.create_task(name, desc, deps, func);
@@ -260,8 +266,8 @@ fn options(runtime: Runtime) -> RuntimeResult {
 ///
 /// # Lua arguments
 /// * `str: string` - The string to print.
-fn print(runtime: Runtime) -> RuntimeResult {
-    let runner = Runner::from_runtime(runtime.clone()).unwrap();
+fn print(mut runtime: Runtime) -> RuntimeResult {
+    let runner = Runner::from_runtime(&mut runtime).unwrap();
     let string = runtime.state().check_string(1).to_string();
     let string = expand_string(&string, runtime.clone());
     let mut out = term::stdout().unwrap();
@@ -287,13 +293,25 @@ fn print(runtime: Runtime) -> RuntimeResult {
 /// # Lua arguments
 /// * `name: string` - The name of the task to set as default.
 fn set_default_task(mut runtime: Runtime) -> RuntimeResult {
-    let runner: &mut Runner = runtime.reg_get("runner").unwrap();
+    let runner = Runner::from_runtime(&mut runtime).unwrap();
 
     // Get the task name as the first argument.
     let name = runtime.state().check_string(1).to_string();
 
     // Set the default task to the given name.
     runner.default_task = Some(name);
+
+    Ok(0)
+}
+
+/// Sets the description for the next task.
+///
+/// # Lua arguments
+/// * `name: string` - The description.
+fn set_description(mut runtime: Runtime) -> RuntimeResult {
+    let desc = runtime.state().check_string(1).to_string();
+    runtime.state().push(desc);
+    runtime.reg_set("rote.nextDescription");
 
     Ok(0)
 }
@@ -325,8 +343,12 @@ pub fn open_lib(mut runtime: Runtime) {
     runtime.state().set_global("rote");
 
     // Define some global aliases.
+    runtime.register_fn("default", set_default_task);
+    runtime.register_fn("desc", set_description);
     runtime.register_fn("exec", execute);
     runtime.register_fn("export", export);
     runtime.register_fn("glob", glob);
     runtime.register_fn("print", print);
+    runtime.register_fn("rule", create_rule);
+    runtime.register_fn("task", create_task);
 }
