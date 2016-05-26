@@ -6,14 +6,15 @@ extern crate lazysort;
 extern crate regex;
 extern crate runtime;
 extern crate term;
-mod error;
+
 mod logger;
 mod runner;
 mod stdlib;
+mod graph;
 
-use error::Die;
 use getopts::Options;
 use lazysort::SortedBy;
+use runtime::Environment;
 use std::env;
 use std::path;
 use std::process;
@@ -49,11 +50,11 @@ fn print_task_list(runner: &runner::Runner) {
     for task in runner.tasks.iter().sorted_by(|a, b| {
         a.0.cmp(b.0)
     }) {
-        out.fg(term::color::GREEN).unwrap();
+        out.fg(term::color::BRIGHT_GREEN).unwrap();
         write!(out, "  {:16}", task.0).unwrap();
         out.reset().unwrap();
 
-        if let Some(ref description) = task.1.borrow().description {
+        if let Some(ref description) = task.1.description {
             write!(out, "{}", description).unwrap();
         }
 
@@ -62,7 +63,7 @@ fn print_task_list(runner: &runner::Runner) {
 
     if let Some(ref default) = runner.default_task() {
         println!("");
-        println!("Default task: {}", default.borrow().name);
+        println!("Default task: {}", default.name);
     }
 }
 
@@ -83,18 +84,20 @@ fn main() {
     options.optflagmulti("v", "verbose", "Enable verbose logging.");
 
     let matches = options.parse(&args[1..]).unwrap_or_else(|err| {
-        warn!("{}", err);
+        logger::init(logger::Filter::Error).unwrap();
+        error!("{}", err);
         process::exit(2);
     });
 
     // Set the logging verbosity level.
     logger::init(if matches.opt_present("quiet") {
-        logger::Filter::Off
+        logger::Filter::Error
     } else {
         match matches.opt_count("verbose") {
-            0 => logger::Filter::Info,
-            1 => logger::Filter::Debug,
-            _ => logger::Filter::Trace
+            0 => logger::Filter::Warn,
+            1 => logger::Filter::Info,
+            2 => logger::Filter::Debug,
+            _ => logger::Filter::Trace,
         }
     }).unwrap();
 
@@ -139,25 +142,19 @@ fn main() {
         }
     }
 
-    // Get all of the task arguments.
-    let mut args = matches.free.clone();
+    // Set up the environment.
+    let environment = Environment::new(path, matches.opt_present("dry-run"));
 
-    // Get the name of the task to run.
-    let task_name = if args.is_empty() {
-        "default".to_string()
-    } else {
-        args.remove(0)
-    };
-
-    println!("Build file: {}\r\n", path.to_str().unwrap());
+    info!("build file: {}", environment.path().to_str().unwrap());
 
     // Create a new script runtime.
-    let mut runner = runner::Runner::new(matches.opt_present("d")).unwrap_or_else(|e| {
-        e.die();
-        unreachable!();
+    let mut runner = runner::Runner::new().unwrap_or_else(|e| {
+        error!("{}", e);
+        process::exit(1);
     });
-    if let Err(e) = runner.load(&path) {
-        e.die();
+    if let Err(e) = runner.load(environment.path()) {
+        error!("{}", e);
+        process::exit(1);
     }
 
     // List all tasks instead of running one.
@@ -166,8 +163,20 @@ fn main() {
         return;
     }
 
-    // Run the specified task.
-    if let Err(e) = runner.run(&task_name, args) {
-        e.die();
+    // Get all of the task arguments.
+    let mut args = matches.free.clone();
+
+    // Run the specified task, or the default if none is specified.
+    if let Err(e) = {
+        if args.is_empty() {
+            runner.run_default()
+        } else {
+            // Run the specified task.
+            let task_name = args.remove(0);
+            runner.run(&task_name)
+        }
+    } {
+        error!("{}", e);
+        process::exit(1);
     }
 }

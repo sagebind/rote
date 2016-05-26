@@ -33,9 +33,6 @@ impl Runtime {
         // Create a new Lua state.
         let mut state = lua::State::new();
 
-        // Initialize the standard Lua libraries.
-        state.open_libs();
-
         Runtime {
             state: state
         }

@@ -1,11 +1,16 @@
 use runner::Runner;
 use glob;
 use regex::{Captures, Regex};
-use runtime::lua;
 use runtime::{Runtime, RuntimeResult};
+use runtime::lua;
+use runtime::rule::Rule;
+use runtime::task::NamedTask;
 use std::env;
+use std::io::prelude::*;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::str;
+use std::rc::Rc;
 use term;
 
 
@@ -36,11 +41,17 @@ pub fn expand_string(input: &str, runtime: Runtime) -> String {
 fn get_next_description(mut runtime: Runtime) -> Option<String> {
     runtime.reg_get("rote.nextDescription");
 
-    if runtime.state().is_string(-1) {
+    let result = if runtime.state().is_string(-1) {
         Some(runtime.state().check_string(-1).to_string())
     } else {
         None
-    }
+    };
+
+    runtime.state().pop(1);
+    runtime.state().push_nil();
+    runtime.reg_set("rote.nextDescription");
+
+    result
 }
 
 
@@ -66,7 +77,6 @@ fn create_rule(mut runtime: Runtime) -> RuntimeResult {
     let runner = Runner::from_runtime(&mut runtime).unwrap();
 
     let pattern = runtime.state().check_string(1).to_string();
-    let desc = get_next_description(runtime.clone());
 
     // Get the list of dependencies if given.
     let deps = if runtime.state().type_of(2) == Some(lua::Type::Table) {
@@ -85,7 +95,20 @@ fn create_rule(mut runtime: Runtime) -> RuntimeResult {
         None
     };
 
-    runner.create_rule(pattern, desc, deps, func);
+    let callback = Rc::new(move |name: &str| {
+        let mut runtime = runtime.clone();
+
+        // Get the function reference onto the Lua stack.
+        runtime.state().raw_geti(lua::REGISTRYINDEX, func.unwrap().value() as i64);
+
+        // Push the synthesized name onto the stack.
+        runtime.state().push(name);
+
+        // Invoke the task function.
+        runtime.call(1, 0, 0).map(|_| ()).map_err(|e| e.into())
+    });
+
+    runner.add_rule(Rc::new(Rule::new(pattern, deps, Some(callback))));
     Ok(0)
 }
 
@@ -101,6 +124,7 @@ fn create_task(mut runtime: Runtime) -> RuntimeResult {
 
     let name = runtime.state().check_string(1).to_string();
     let desc = get_next_description(runtime.clone());
+    let mut func_index = 3;
 
     // Get the list of dependencies if given.
     let deps = if runtime.state().type_of(2) == Some(lua::Type::Table) {
@@ -108,14 +132,26 @@ fn create_task(mut runtime: Runtime) -> RuntimeResult {
             .map(|item| item.value().unwrap())
             .collect()
     } else {
+        func_index -= 1;
         Vec::new()
     };
 
     // Get a portable reference to the task function.
+    runtime.state().push_value(func_index);
     runtime.state().check_type(-1, lua::Type::Function);
     let func = runtime.state().reference(lua::REGISTRYINDEX);
 
-    runner.create_task(name, desc, deps, func);
+    let callback = Box::new(move || {
+        let mut runtime = runtime.clone();
+
+        // Get the function reference onto the Lua stack.
+        runtime.state().raw_geti(lua::REGISTRYINDEX, func.value() as i64);
+
+        // Invoke the task function.
+        runtime.call(0, 0, 0).map(|_| ()).map_err(|e| e.into())
+    });
+
+    runner.add_task(Rc::new(NamedTask::new(name, desc, deps, Some(callback))));
     Ok(0)
 }
 
@@ -131,8 +167,6 @@ fn current_dir(runtime: Runtime) -> RuntimeResult {
 
 /// Executes a shell command with a given list of arguments.
 fn execute(runtime: Runtime) -> RuntimeResult {
-    //let runner = Runner::from_runtime(runtime.clone());
-
     // Create a command for the given program name.
     let mut command = Command::new(runtime.state().check_string(1));
 
@@ -147,16 +181,67 @@ fn execute(runtime: Runtime) -> RuntimeResult {
         command.arg(expand_string(runtime.state().check_string(i), runtime.clone()));
     }
 
-    // If we're not inside a task, just inherit standard output streams.
-    command.stdout(Stdio::inherit());
-    command.stderr(Stdio::inherit());
+    // Execute the command and capture the exit status.
+    command.status().map_err(|e| {
+        format!("failed to execute process: {}", e).into()
+    }).and_then(|status| {
+        runtime.state().push_number(status.code().unwrap_or(1) as f64);
+        Ok(1)
+    })
+}
 
-    // Run the command, piping output to stdout and returning the exit code.
-    command.output().map_err(|e| {
+/// Executes a shell command with a given list of arguments.
+fn pipe(runtime: Runtime) -> RuntimeResult {
+    // Create a command for the given program name.
+    let mut command = Command::new(runtime.state().check_string(2));
+
+    // Set the current directory.
+    if let Ok(dir) = env::current_dir() {
+        command.current_dir(dir);
+    }
+
+    // For each other parameter given, add it as a shell argument.
+    for i in 3..runtime.state().get_top()+1 {
+        // Expand each argument as we go.
+        command.arg(expand_string(runtime.state().check_string(i), runtime.clone()));
+    }
+
+    // Get the input buffer string, if given.
+    let input = if runtime.state().type_of(1) == Some(lua::Type::Nil) {
+        command.stdin(Stdio::null());
+        None
+    } else {
+        command.stdin(Stdio::piped());
+        Some(runtime.state().check_string(1).to_string())
+    };
+
+    command.stdout(Stdio::piped());
+    command.stderr(Stdio::piped());
+
+    // Start running the command process.
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(e) => return Err(format!("failed to execute process: {}", e).into()),
+    };
+
+    // Write the input string to the pipe if given.
+    if let Some(input) = input {
+        if let Err(e) = child.stdin.as_mut().unwrap().write_all(input.as_bytes()) {
+            return Err(format!("failed to execute process: {}", e).into());
+        }
+    }
+
+    // Wait for the program to finish and collect the output.
+    child.wait_with_output().map_err(|e| {
         format!("failed to execute process: {}", e).into()
     }).and_then(|output| {
+        unsafe {
+            runtime.state().push_string(str::from_utf8_unchecked(&output.stdout));
+            runtime.state().push_string(str::from_utf8_unchecked(&output.stderr));
+        }
         runtime.state().push_number(output.status.code().unwrap_or(1) as f64);
-        Ok(1)
+
+        Ok(3)
     })
 }
 
@@ -336,6 +421,7 @@ pub fn open_lib(mut runtime: Runtime) {
         ("export", export),
         ("glob", glob),
         ("options", options),
+        ("pipe", pipe),
         ("print", print),
         ("set_default_task", set_default_task),
         ("version", version),
@@ -348,7 +434,15 @@ pub fn open_lib(mut runtime: Runtime) {
     runtime.register_fn("exec", execute);
     runtime.register_fn("export", export);
     runtime.register_fn("glob", glob);
+    runtime.register_fn("pipe", pipe);
     runtime.register_fn("print", print);
     runtime.register_fn("rule", create_rule);
     runtime.register_fn("task", create_task);
+
+    // Set up pipe to be a string method.
+    runtime.state().get_global("string");
+    runtime.state().push("pipe");
+    runtime.push_fn(pipe);
+    runtime.state().set_table(-3);
+    runtime.state().pop(1);
 }

@@ -1,8 +1,15 @@
+extern crate filetime;
 extern crate libc;
+#[macro_use] extern crate log;
 pub extern crate lua;
-mod iter;
-mod runtime;
 
+mod environment;
+mod iter;
+pub mod rule;
+mod runtime;
+pub mod task;
+
+pub use environment::Environment;
 pub use iter::{TableIterator, TableItem};
 pub use runtime::{Function, Runtime, RuntimeResult};
 

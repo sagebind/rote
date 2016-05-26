@@ -129,6 +129,7 @@ version = "0.1.0"
 dependencies = [
  "filetime 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "lua 0.0.8 (git+https://github.com/jcmoyer/rust-lua53)",
 ]
 
