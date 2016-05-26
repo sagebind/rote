@@ -4,7 +4,7 @@ use term;
 pub use log::LogLevelFilter as Filter;
 
 
-/// Writes log messages to standard output and standard error.
+/// Writes log messages to standard error.
 ///
 /// The enabled filter level can be customized by passing in a specific filter.
 struct Logger(LogLevelFilter);
@@ -16,56 +16,54 @@ impl Log for Logger {
 
     fn log(&self, record: &LogRecord) {
         if self.enabled(record.metadata()) {
+            let mut err = term::stderr().expect("failed to open stderr");
+
             // Print with colors matching the level.
             match record.level() {
                 LogLevel::Error => {
-                    let mut t = term::stderr().unwrap();
+                    err.attr(term::Attr::Bold).ok();
+                    err.fg(term::color::BRIGHT_RED).ok();
+                    write!(err, "error: ").unwrap();
 
-                    t.attr(term::Attr::Bold).unwrap();
-                    t.fg(term::color::BRIGHT_RED).unwrap();
-                    write!(t, "error: ").unwrap();
-                    t.fg(term::color::BRIGHT_WHITE).unwrap();
-                    writeln!(t, "{}", record.args()).unwrap();
-                    t.reset().unwrap();
+                    err.fg(term::color::BRIGHT_WHITE).ok();
+                    writeln!(err, "{}", record.args()).unwrap();
+                    err.reset().ok();
                 }
                 LogLevel::Warn => {
-                    let mut t = term::stderr().unwrap();
+                    err.fg(term::color::BRIGHT_YELLOW).ok();
+                    write!(err, "warn: ").unwrap();
+                    err.reset().ok();
 
-                    t.attr(term::Attr::Bold).unwrap();
-                    t.fg(term::color::BRIGHT_YELLOW).unwrap();
-                    write!(t, "warn: ").unwrap();
-                    t.fg(term::color::BRIGHT_WHITE).unwrap();
-                    writeln!(t, "{}", record.args()).unwrap();
-                    t.reset().unwrap();
+                    err.attr(term::Attr::Bold).ok();
+                    err.fg(term::color::BRIGHT_WHITE).ok();
+                    writeln!(err, "{}", record.args()).unwrap();
+                    err.reset().ok();
                 }
                 LogLevel::Info => {
-                    let mut t = term::stdout().unwrap();
+                    err.fg(term::color::BRIGHT_GREEN).ok();
+                    write!(err, "info: ").unwrap();
 
-                    t.attr(term::Attr::Bold).unwrap();
-                    t.fg(term::color::BRIGHT_GREEN).unwrap();
-                    write!(t, "info: ").unwrap();
-                    t.fg(term::color::BRIGHT_WHITE).unwrap();
-                    writeln!(t, "{}", record.args()).unwrap();
-                    t.reset().unwrap();
+                    err.fg(term::color::BRIGHT_WHITE).ok();
+                    writeln!(err, "{}", record.args()).unwrap();
+                    err.reset().ok();
                 }
                 LogLevel::Debug => {
-                    let mut t = term::stdout().unwrap();
+                    err.fg(term::color::BRIGHT_BLUE).ok();
+                    write!(err, "debug: ").unwrap();
+                    err.reset().ok();
 
-                    t.fg(term::color::BRIGHT_BLUE).unwrap();
-                    write!(t, "debug: ").unwrap();
-                    t.reset().unwrap();
-                    writeln!(t, "{}", record.args()).unwrap();
+                    err.fg(term::color::BRIGHT_WHITE).ok();
+                    writeln!(err, "{}", record.args()).unwrap();
+                    err.reset().ok();
                 }
                 LogLevel::Trace => {
-                    let mut t = term::stdout().unwrap();
-
-                    t.attr(term::Attr::Bold).unwrap();
-                    t.fg(term::color::BRIGHT_WHITE).unwrap();
-                    write!(t, "trace: ").unwrap();
-                    t.reset().unwrap();
-                    writeln!(t, "{}", record.args()).unwrap();
+                    err.fg(term::color::BRIGHT_WHITE).ok();
+                    writeln!(err, "trace: {}", record.args()).unwrap();
+                    err.reset().ok();
                 }
             }
+
+            err.flush().unwrap();
         }
     }
 }
