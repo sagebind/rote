@@ -2,13 +2,21 @@
 name = "fs"
 version = "0.1.0"
 dependencies = [
- "runtime 0.1.0",
+ "script 0.1.0",
 ]
 
 [[package]]
 name = "bitflags"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "filetime"
+version = "0.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "libc 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "gcc"
@@ -21,9 +29,19 @@ version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "libc"
+version = "0.2.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "log"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
 name = "lua"
 version = "0.0.8"
-source = "git+https://github.com/jcmoyer/rust-lua53#9d3c7dcab683a404f561e0d252f7672b75051680"
+source = "git+https://github.com/jcmoyer/rust-lua53#4e31665984d4d42fbbf5d77757d87b727762753d"
 dependencies = [
  "bitflags 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "gcc 0.3.28 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -31,10 +49,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "runtime"
+name = "script"
 version = "0.1.0"
 dependencies = [
+ "filetime 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "lua 0.0.8 (git+https://github.com/jcmoyer/rust-lua53)",
 ]
 

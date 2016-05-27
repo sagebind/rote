@@ -1,4 +1,4 @@
-use runtime::task::Task;
+use script::task::Task;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::error::Error;
 use std::rc::Rc;

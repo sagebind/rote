@@ -9,15 +9,24 @@ function cargo.build(options)
         release = false,
         flags = {},
     })
-    local args = {"cargo", "rustc", "--verbose"}
+    local args = {"cargo", "rustc"}
 
     if options.release then
         table.insert(args, "--release")
     end
 
+    if options.verbose then
+        table.insert(args, "--verbose")
+    end
+
     if options.target then
         table.insert(args, "--target")
         table.insert(args, options.target)
+    end
+
+    if options.manifest then
+        table.insert(args, "--manifest-path")
+        table.insert(args, options.manifest)
     end
 
     if options.flags then
@@ -31,15 +40,17 @@ function cargo.build(options)
 end
 
 -- Gets metadata about the current Cargo package.
-function cargo.info()
-    if not fs.exists("Cargo.toml") then
+function cargo.info(manifest)
+    manifest = manifest or "Cargo.toml"
+
+    if not fs.exists(manifest) then
         return {}
     end
 
     local info = {
         authors = {},
     }
-    local file = fs.get("Cargo.toml")
+    local file = fs.get(manifest)
 
     for name in file:gmatch("name%s*=%s*\"([^\"]+)\"") do
         info.name = name

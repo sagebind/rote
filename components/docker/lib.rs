@@ -1,11 +1,11 @@
 extern crate docker;
-extern crate runtime;
+extern crate script;
 
 use docker::Docker;
-use runtime::{Runtime, RuntimeResult, StatePtr};
+use script::{Environment, ScriptResult, StatePtr};
 
 
-pub fn build(mut runtime: Runtime) -> RuntimeResult {
+pub fn build(environment: Environment) -> ScriptResult {
     Ok(0)
 }
 

@@ -8,5 +8,5 @@ path = "lib.rs"
 crate-type = ["dylib"]
 
 [dependencies]
-runtime = { path = "../runtime" }
 sass-rs = { git = "https://github.com/compass-rs/sass-rs" }
+script = { path = "../script" }

@@ -13,7 +13,7 @@ glob = "0.2"
 lazysort = "0.1"
 log = "0.3"
 regex = "0.1"
-runtime = { path = "../runtime" }
+script = { path = "../script" }
 term = "0.4"
 
 [[bin]]

@@ -1,6 +1,6 @@
-extern crate runtime;
+extern crate script;
 
-use runtime::{Runtime, RuntimeResult, StatePtr};
+use script::{Environment, ScriptResult, StatePtr};
 use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io::prelude::*;
@@ -10,10 +10,10 @@ use std::io::prelude::*;
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to the file to check.
-fn exists(runtime: Runtime) -> RuntimeResult {
-    let path = runtime.state().check_string(1).to_string();
+fn exists(environment: Environment) -> ScriptResult {
+    let path = environment.state().check_string(1).to_string();
 
-    runtime.state().push_bool(fs::metadata(path).is_ok());
+    environment.state().push_bool(fs::metadata(path).is_ok());
 
     Ok(1)
 }
@@ -22,11 +22,11 @@ fn exists(runtime: Runtime) -> RuntimeResult {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to check.
-fn is_dir(runtime: Runtime) -> RuntimeResult {
-    let path = runtime.state().check_string(1).to_string();
+fn is_dir(environment: Environment) -> ScriptResult {
+    let path = environment.state().check_string(1).to_string();
 
     let metadata = fs::metadata(path);
-    runtime.state().push_bool(metadata.is_ok() && metadata.unwrap().file_type().is_dir());
+    environment.state().push_bool(metadata.is_ok() && metadata.unwrap().file_type().is_dir());
 
     Ok(1)
 }
@@ -35,11 +35,11 @@ fn is_dir(runtime: Runtime) -> RuntimeResult {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to check.
-fn is_file(runtime: Runtime) -> RuntimeResult {
-    let path = runtime.state().check_string(1).to_string();
+fn is_file(environment: Environment) -> ScriptResult {
+    let path = environment.state().check_string(1).to_string();
 
     let metadata = fs::metadata(path);
-    runtime.state().push_bool(metadata.is_ok() && metadata.unwrap().file_type().is_file());
+    environment.state().push_bool(metadata.is_ok() && metadata.unwrap().file_type().is_file());
 
     Ok(1)
 }
@@ -48,11 +48,11 @@ fn is_file(runtime: Runtime) -> RuntimeResult {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to check.
-fn is_symlink(runtime: Runtime) -> RuntimeResult {
-    let path = runtime.state().check_string(1).to_string();
+fn is_symlink(environment: Environment) -> ScriptResult {
+    let path = environment.state().check_string(1).to_string();
 
     let metadata = fs::metadata(path);
-    runtime.state().push_bool(metadata.is_ok() && metadata.unwrap().file_type().is_symlink());
+    environment.state().push_bool(metadata.is_ok() && metadata.unwrap().file_type().is_symlink());
 
     Ok(1)
 }
@@ -61,9 +61,9 @@ fn is_symlink(runtime: Runtime) -> RuntimeResult {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to create the directory.
-fn mkdir(runtime: Runtime) -> RuntimeResult {
+fn mkdir(environment: Environment) -> ScriptResult {
     // Get the path as the first argument.
-    let path = runtime.state().check_string(1).to_string();
+    let path = environment.state().check_string(1).to_string();
 
     if fs::create_dir(&path).is_err() {
         return Err(format!("failed to create directory \"{}\"", path).into());
@@ -77,9 +77,9 @@ fn mkdir(runtime: Runtime) -> RuntimeResult {
 /// # Lua arguments
 /// * `source: string`          - Path of the file to copy.
 /// * `dest: string`            - Path to copy the file to.
-fn copy(runtime: Runtime) -> RuntimeResult {
-    let source = runtime.state().check_string(1).to_string();
-    let dest = runtime.state().check_string(2).to_string();
+fn copy(environment: Environment) -> ScriptResult {
+    let source = environment.state().check_string(1).to_string();
+    let dest = environment.state().check_string(2).to_string();
 
     if fs::copy(&source, dest).is_err() {
         return Err(format!("failed to copy \"{}\"", source).into());
@@ -93,9 +93,9 @@ fn copy(runtime: Runtime) -> RuntimeResult {
 /// # Lua arguments
 /// * `source: string`          - Path of the file to move.
 /// * `dest: string`            - Path to move the file to.
-fn rename(runtime: Runtime) -> RuntimeResult {
-    let source = runtime.state().check_string(1).to_string();
-    let destination = runtime.state().check_string(2).to_string();
+fn rename(environment: Environment) -> ScriptResult {
+    let source = environment.state().check_string(1).to_string();
+    let destination = environment.state().check_string(2).to_string();
 
     if fs::rename(source, destination).is_err() {
         return Err("no such file or directory".into());
@@ -108,8 +108,8 @@ fn rename(runtime: Runtime) -> RuntimeResult {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path of the file or directory to remove.
-fn remove(runtime: Runtime) -> RuntimeResult {
-    let path = runtime.state().check_string(1).to_string();
+fn remove(environment: Environment) -> ScriptResult {
+    let path = environment.state().check_string(1).to_string();
 
     if let Ok(metadata) = fs::metadata(&path) {
         if metadata.file_type().is_dir() {
@@ -130,8 +130,8 @@ fn remove(runtime: Runtime) -> RuntimeResult {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path of the file to read from.
-fn get(runtime: Runtime) -> RuntimeResult {
-    let path = runtime.state().check_string(1).to_string();
+fn get(environment: Environment) -> ScriptResult {
+    let path = environment.state().check_string(1).to_string();
 
     let file = File::open(path);
 
@@ -146,7 +146,7 @@ fn get(runtime: Runtime) -> RuntimeResult {
         return Err("failed to read file".into());
     }
 
-    runtime.state().push_string(&buffer);
+    environment.state().push_string(&buffer);
 
     Ok(1)
 }
@@ -156,9 +156,9 @@ fn get(runtime: Runtime) -> RuntimeResult {
 /// # Lua arguments
 /// * `path: string`            - Path to the file to write to.
 /// * `contents: string`        - The contents to write.
-fn put(runtime: Runtime) -> RuntimeResult {
-    let path = runtime.state().check_string(1).to_string();
-    let contents = String::from(runtime.state().check_string(2));
+fn put(environment: Environment) -> ScriptResult {
+    let path = environment.state().check_string(1).to_string();
+    let contents = String::from(environment.state().check_string(2));
 
     let file = OpenOptions::new()
                    .write(true)
@@ -183,9 +183,9 @@ fn put(runtime: Runtime) -> RuntimeResult {
 /// # Lua arguments
 /// * `path: string`            - Path to the file to append to.
 /// * `contents: string`        - The contents to append.
-fn append(runtime: Runtime) -> RuntimeResult {
-    let path = runtime.state().check_string(1).to_string();
-    let contents = String::from(runtime.state().check_string(2));
+fn append(environment: Environment) -> ScriptResult {
+    let path = environment.state().check_string(1).to_string();
+    let contents = String::from(environment.state().check_string(2));
 
     let file = OpenOptions::new()
                    .write(true)
@@ -209,13 +209,13 @@ fn append(runtime: Runtime) -> RuntimeResult {
 /// # Lua arguments
 /// * `sources: table`          - A list of source files to combine.
 /// * `dest: string`            - The path to the output file.
-fn combine(mut runtime: Runtime) -> RuntimeResult {
-    if !runtime.state().is_table(1) {
+fn combine(environment: Environment) -> ScriptResult {
+    if !environment.state().is_table(1) {
         return Err("first argument must be a table".into());
     }
 
     // Open the output file for writing.
-    let dest = runtime.state().check_string(2).to_string();
+    let dest = environment.state().check_string(2).to_string();
     let out_file = OpenOptions::new()
                        .write(true)
                        .truncate(true)
@@ -229,7 +229,7 @@ fn combine(mut runtime: Runtime) -> RuntimeResult {
     let mut out_file = out_file.unwrap();
 
     // Walk through each path in the sources table and write their contents.
-    for item in runtime.iter(1) {
+    for mut item in environment.iter(1) {
         let source: String = item.value().unwrap();
 
         let in_file = File::open(&source);
@@ -257,8 +257,9 @@ fn combine(mut runtime: Runtime) -> RuntimeResult {
 
 #[no_mangle]
 pub unsafe extern fn luaopen_fs(ptr: StatePtr) -> i32 {
-    let mut runtime = Runtime::from_ptr(ptr);
-    runtime.register_lib(&[
+    let environment = Environment::from_ptr(ptr);
+
+    environment.register_lib(&[
         ("exists", exists),
         ("is_dir", is_dir),
         ("is_file", is_file),

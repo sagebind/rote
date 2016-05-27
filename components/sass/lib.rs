@@ -1,11 +1,11 @@
-extern crate runtime;
 extern crate sass_rs;
+extern crate script;
 
-use runtime::{Runtime, RuntimeResult, StatePtr};
 use sass_rs::sass_context::{OutputStyle, SassFileContext};
+use script::{Environment, ScriptResult, StatePtr};
 
 
-fn compile(runtime: Runtime) -> RuntimeResult {
+fn compile(environment: Environment) -> ScriptResult {
     let style = OutputStyle::Compressed;
 
     let mut file_context = SassFileContext::new("filename");
@@ -22,9 +22,9 @@ fn compile(runtime: Runtime) -> RuntimeResult {
 
 #[no_mangle]
 pub unsafe extern fn luaopen_sass(ptr: StatePtr) -> i32 {
-    let mut runtime = Runtime::from_ptr(ptr);
+    let environment = Environment::from_ptr(ptr);
 
-    runtime.register_lib(&[
+    environment.register_lib(&[
         ("compile", compile)
     ]);
 

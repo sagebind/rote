@@ -1,26 +1,25 @@
 extern crate flate2;
-extern crate runtime;
+extern crate script;
 extern crate tar;
 extern crate time;
 mod ar;
 mod deb;
 
 use deb::*;
-use runtime::{Runtime, RuntimeResult, StatePtr};
-use runtime::lua;
+use script::{lua, Environment, ScriptResult, StatePtr};
 use std::fs::File;
 use std::path::Path;
 use tar::Archive;
 
 
-fn tar(mut runtime: Runtime) -> RuntimeResult {
-    let path = runtime.state().check_string(1).to_string();
-    runtime.state().check_type(2, lua::Type::Table);
+fn tar(environment: Environment) -> ScriptResult {
+    let path = environment.state().check_string(1).to_string();
+    environment.state().check_type(2, lua::Type::Table);
 
     let file = File::create(path).unwrap();
     let archive = Archive::new(file);
 
-    for item in runtime.iter(2) {
+    for mut item in environment.iter(2) {
         let input_file: String = item.value().unwrap();
 
         if archive.append_path(input_file).is_err() {
@@ -35,13 +34,13 @@ fn tar(mut runtime: Runtime) -> RuntimeResult {
     Ok(0)
 }
 
-fn deb(mut runtime: Runtime) -> RuntimeResult {
-    runtime.state().check_type(1, lua::Type::Table);
+fn deb(environment: Environment) -> ScriptResult {
+    environment.state().check_type(1, lua::Type::Table);
 
     let mut builder = PackageBuilder::new();
     let mut file: Option<String> = None;
 
-    for item in runtime.iter(1) {
+    for mut item in environment.iter(1) {
         match &item.key::<String>().unwrap() as &str {
             "output" => {
                 file = Some(item.value().unwrap());
@@ -99,7 +98,7 @@ fn deb(mut runtime: Runtime) -> RuntimeResult {
                 builder.section(&item.value::<String>().unwrap());
             }
             "depends" => {
-                for item in runtime.iter(-1) {
+                for mut item in environment.iter(-1) {
                     let package: String = item.key().unwrap();
                     let version: String = item.value().unwrap();
 
@@ -122,7 +121,7 @@ fn deb(mut runtime: Runtime) -> RuntimeResult {
                 builder.homepage(&item.value::<String>().unwrap());
             }
             "files" => {
-                for item in runtime.iter(-1) {
+                for mut item in environment.iter(-1) {
                     let dest: String = item.key().unwrap();
                     let source: String = item.value().unwrap();
 
@@ -148,8 +147,9 @@ fn deb(mut runtime: Runtime) -> RuntimeResult {
 
 #[no_mangle]
 pub unsafe extern fn luaopen_pkg(ptr: StatePtr) -> i32 {
-    let mut runtime = Runtime::from_ptr(ptr);
-    runtime.register_lib(&[
+    let environment = Environment::from_ptr(ptr);
+
+    environment.register_lib(&[
         ("tar", tar),
         ("deb", deb),
     ]);

@@ -1,5 +1,5 @@
 [root]
-name = "runtime"
+name = "script"
 version = "0.1.0"
 dependencies = [
  "filetime 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -23,7 +23,7 @@ dependencies = [
 
 [[package]]
 name = "gcc"
-version = "0.3.27"
+version = "0.3.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
@@ -44,10 +44,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "lua"
 version = "0.0.8"
-source = "git+https://github.com/jcmoyer/rust-lua53#9d3c7dcab683a404f561e0d252f7672b75051680"
+source = "git+https://github.com/jcmoyer/rust-lua53#4e31665984d4d42fbbf5d77757d87b727762753d"
 dependencies = [
  "bitflags 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "gcc 0.3.27 (registry+https://github.com/rust-lang/crates.io-index)",
+ "gcc 0.3.28 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

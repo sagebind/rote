@@ -9,4 +9,4 @@ crate-type = ["dylib"]
 
 [dependencies]
 docker = "0.0.41"
-runtime = { path = "../runtime" }
+script = { path = "../script" }

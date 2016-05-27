@@ -1,10 +1,10 @@
 extern crate gcc;
-extern crate runtime;
+extern crate script;
 
-use runtime::{Runtime, RuntimeResult, StatePtr};
+use script::{Environment, ScriptResult, StatePtr};
 
 
-fn create_binary(runtime: Runtime) -> RuntimeResult {
+fn create_binary(environment: Environment) -> ScriptResult {
     let mut config = gcc::Config::new();
     config.cargo_metadata(false);
 
@@ -18,9 +18,9 @@ fn create_binary(runtime: Runtime) -> RuntimeResult {
 
 #[no_mangle]
 pub unsafe extern fn luaopen_cpp(ptr: StatePtr) -> i32 {
-    let mut runtime = Runtime::from_ptr(ptr);
+    let environment = Environment::from_ptr(ptr);
 
-    runtime.register_lib(&[
+    environment.register_lib(&[
         ("binary", create_binary),
     ]);
 

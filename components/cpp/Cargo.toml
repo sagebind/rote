@@ -9,4 +9,4 @@ crate-type = ["dylib"]
 
 [dependencies]
 gcc = "*"
-runtime = { path = "../runtime" }
+script = { path = "../script" }

@@ -4,7 +4,7 @@ extern crate glob;
 extern crate lazysort;
 #[macro_use] extern crate log;
 extern crate regex;
-extern crate runtime;
+extern crate script;
 extern crate term;
 
 mod logger;
@@ -14,10 +14,11 @@ mod graph;
 
 use getopts::Options;
 use lazysort::SortedBy;
-use runtime::Environment;
+use script::Environment;
 use std::env;
 use std::path;
 use std::process;
+use script::task::{NamedTask, Task};
 
 
 // Define some global constants for various metadata.
@@ -42,28 +43,28 @@ fn print_usage(options: Options) {
     print!("{}\r\n{}", ROTE_TITLE, options.usage(&short_usage));
 }
 
-fn print_task_list(runner: &runner::Runner) {
+fn print_task_list(environment: &Environment) {
     let mut out = term::stdout().unwrap();
 
     println!("Available tasks:");
 
-    for task in runner.tasks.iter().sorted_by(|a, b| {
-        a.0.cmp(b.0)
+    for task in environment.tasks().iter().sorted_by(|a, b| {
+        a.name().cmp(b.name())
     }) {
         out.fg(term::color::BRIGHT_GREEN).unwrap();
-        write!(out, "  {:16}", task.0).unwrap();
+        write!(out, "  {:16}", task.name()).unwrap();
         out.reset().unwrap();
 
-        if let Some(ref description) = task.1.description {
+        if let Some(ref description) = task.description() {
             write!(out, "{}", description).unwrap();
         }
 
         writeln!(out, "").unwrap();
     }
 
-    if let Some(ref default) = runner.default_task() {
+    if let Some(ref default) = environment.default_task() {
         println!("");
-        println!("Default task: {}", default.name);
+        println!("Default task: {}", default);
     }
 }
 
@@ -134,32 +135,33 @@ fn main() {
             process::exit(1);
         });
 
-    // Set the new current directory to the directory containing the Rotefile.
-    if let Some(directory) = path.parent() {
-        if env::set_current_dir(&directory).is_err() {
-            error!("failed to change directory to '{}'", &directory.to_string_lossy());
-            process::exit(1);
-        }
-    }
-
     // Set up the environment.
-    let environment = Environment::new(path, matches.opt_present("dry-run"));
-
-    info!("build file: {}", environment.path().to_str().unwrap());
-
-    // Create a new script runtime.
-    let mut runner = runner::Runner::new().unwrap_or_else(|e| {
+    let environment = Environment::new(path).unwrap_or_else(|e| {
         error!("{}", e);
         process::exit(1);
     });
-    if let Err(e) = runner.load(environment.path()) {
+
+    info!("build file: {}", environment.path().to_string_lossy());
+
+    // Set the new current directory to the directory containing the Rotefile.
+    if env::set_current_dir(environment.directory()).is_err() {
+        error!("failed to change directory to '{}'", environment.directory().to_string_lossy());
+        process::exit(1);
+    }
+
+    trace!("opening standard module...");
+    stdlib::open_lib(environment.clone());
+    trace!("opening standard module...done");
+
+    // Load the script.
+    if let Err(e) = environment.load() {
         error!("{}", e);
         process::exit(1);
     }
 
     // List all tasks instead of running one.
     if matches.opt_present("list") {
-        print_task_list(&runner);
+        print_task_list(&environment);
         return;
     }
 
@@ -167,6 +169,7 @@ fn main() {
     let mut args = matches.free.clone();
 
     // Run the specified task, or the default if none is specified.
+    let mut runner = runner::Runner::new(environment);
     if let Err(e) = {
         if args.is_empty() {
             runner.run_default()

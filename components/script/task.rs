@@ -49,6 +49,13 @@ impl NamedTask {
             action: action,
         }
     }
+
+    pub fn description<'a>(&'a self) -> Option<&'a str> {
+        match self.description {
+            Some(ref description) => Some(description),
+            None => None,
+        }
+    }
 }
 
 impl Task for NamedTask {
