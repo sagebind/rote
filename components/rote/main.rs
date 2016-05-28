@@ -1,19 +1,16 @@
-extern crate filetime;
 extern crate getopts;
 extern crate glob;
-extern crate lazysort;
 #[macro_use] extern crate log;
 extern crate regex;
 extern crate script;
 extern crate term;
 
+mod graph;
 mod logger;
 mod runner;
 mod stdlib;
-mod graph;
 
 use getopts::Options;
-use lazysort::SortedBy;
 use script::Environment;
 use script::task::Task;
 use std::env;
@@ -43,14 +40,15 @@ fn print_usage(options: Options) {
     print!("{}\r\n{}", ROTE_TITLE, options.usage(&short_usage));
 }
 
+/// Prints the list of named tasks for a script.
 fn print_task_list(environment: &Environment) {
-    let mut out = term::stdout().unwrap();
+    let mut tasks = environment.tasks();
+    tasks.sort_by(|a, b| a.name().cmp(b.name()));
 
+    let mut out = term::stdout().unwrap();
     println!("Available tasks:");
 
-    for task in environment.tasks().iter().sorted_by(|a, b| {
-        a.name().cmp(b.name())
-    }) {
+    for task in tasks {
         out.fg(term::color::BRIGHT_GREEN).unwrap();
         write!(out, "  {:16}", task.name()).unwrap();
         out.reset().unwrap();
