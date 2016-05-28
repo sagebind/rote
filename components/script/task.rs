@@ -34,18 +34,18 @@ pub struct NamedTask {
     pub description: Option<String>,
 
     /// A list of tasks that must be ran before this task.
-    pub deps: Vec<String>,
+    pub dependencies: Vec<String>,
 
     /// Rule action.
     action: Option<Box<Fn() -> Result<(), Box<Error>>>>,
 }
 
 impl NamedTask {
-    pub fn new<S: Into<String>>(name: S, description: Option<S>, deps: Vec<String>, action: Option<Box<Fn() -> Result<(), Box<Error>>>>) -> NamedTask {
+    pub fn new<S: Into<String>>(name: S, description: Option<S>, dependencies: Vec<String>, action: Option<Box<Fn() -> Result<(), Box<Error>>>>) -> NamedTask {
         NamedTask {
             name: name.into(),
             description: description.map(|s| s.into()),
-            deps: deps,
+            dependencies: dependencies,
             action: action,
         }
     }
@@ -69,7 +69,7 @@ impl Task for NamedTask {
     }
 
     fn dependencies(&self) -> &[String] {
-        &self.deps
+        &self.dependencies
     }
 
     fn run(&self) -> Result<(), Box<Error>> {

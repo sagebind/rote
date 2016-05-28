@@ -14,7 +14,7 @@ pub struct Rule {
     pub pattern: String,
 
     /// A list of tasks that must be ran before this task.
-    pub sources: Vec<String>,
+    dependencies: Vec<String>,
 
     /// Rule action.
     action: Option<RuleCallback>,
@@ -24,7 +24,7 @@ impl Rule {
     pub fn new<S: Into<String>, V: Into<Vec<String>>>(pattern: S, dependencies: V, action: Option<RuleCallback>) -> Rule {
         Rule {
             pattern: pattern.into(),
-            sources: dependencies.into(),
+            dependencies: dependencies.into(),
             action: action,
         }
     }
@@ -63,7 +63,7 @@ impl Rule {
         //input.replace("%", "")
 
         Some(FileTask {
-            inputs: Vec::new(),
+            inputs: self.dependencies.clone(),
             output: name,
             action: self.action.clone(),
         })

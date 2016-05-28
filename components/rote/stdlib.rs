@@ -23,18 +23,7 @@ pub fn expand_string(input: &str, environment: Environment) -> String {
         let name = caps.at(1).unwrap_or("");
 
         // Attempt to match a variable definition, or fallback to the original string.
-        if let Ok(value) = env::var(name) {
-            value.to_string()
-        } else {
-            let value = if environment.state().get_global(name) != lua::Type::Nil {
-                environment.state().check_string(-1).to_string()
-            } else {
-                caps.at(0).unwrap_or("").to_string()
-            };
-
-            environment.state().pop(1);
-            value
-        }
+        environment.var(name).unwrap_or("".to_string())
     })
 }
 

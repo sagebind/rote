@@ -171,8 +171,7 @@ fn main() {
         if parts.len() != 2 {
             warn!("invalid variable syntax: '{}'", value);
         } else {
-            environment.state().push(parts[1]);
-            environment.state().set_global(parts[0]);
+            environment.set_var(parts[0], parts[1]);
         }
     }
 

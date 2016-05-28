@@ -1,5 +1,5 @@
 [package]
-name = "fs"
+name = "cpp"
 version = "0.1.0"
 authors = ["coderstephen <me@stephencoakley.com>"]
 
@@ -8,5 +8,4 @@ path = "lib.rs"
 crate-type = ["dylib"]
 
 [dependencies]
-gcc = "*"
 script = { path = "../script" }
