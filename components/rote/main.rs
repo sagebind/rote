@@ -81,6 +81,7 @@ fn main() {
     options.optopt("j", "jobs", "The number of jobs to run simultaneously.", "N");
     options.optflag("l", "list", "List available tasks.");
     options.optflag("q", "quiet", "Supress all non-task output.");
+    options.optmulti("s", "set", "Override a variable value.", "VAR=VALUE");
     options.optflag("V", "version", "Print the program version and exit.");
     options.optflagmulti("v", "verbose", "Enable verbose logging.");
 
@@ -149,6 +150,7 @@ fn main() {
         process::exit(1);
     }
 
+    // Open standard library functions.
     stdlib::open_lib(environment.clone());
 
     // Load the script.
@@ -161,6 +163,18 @@ fn main() {
     if matches.opt_present("list") {
         print_task_list(&environment);
         return;
+    }
+
+    // Set environment variables.
+    for value in matches.opt_strs("set") {
+        let parts: Vec<_> = value.split('=').collect();
+
+        if parts.len() != 2 {
+            warn!("invalid variable syntax: '{}'", value);
+        } else {
+            environment.state().push(parts[1]);
+            environment.state().set_global(parts[0]);
+        }
     }
 
     // Set up the task runner.
