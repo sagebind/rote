@@ -1,9 +1,9 @@
-# Rote
-Plain and simple task and build tool.
+# ![Rote](/docs/logo.png?raw=true)
+##### Automate everything.
 
 **This is highly experimental. Expect anything to change at any time.**
 
-[![Build Status](https://img.shields.io/travis/coderstephen/rote.svg?style=flat-square)](https://travis-ci.org/coderstephen/rote)
+[![Build Status](https://img.shields.io/travis/coderstephen/rote.svg)](https://travis-ci.org/coderstephen/rote) [![Release](https://img.shields.io/github/release/coderstephen/rote.svg)]() [![Downloads](https://img.shields.io/github/downloads/coderstephen/rote/total.svg)]()
 
 Rote is an experimental task runner and build tool designed to be easy to use, portable, and fast. Rote uses [Lua](http://www.lua.org) as a configuration syntax. You do not need to be familiar with Lua to use Rote; the syntax is very simple to understand!
 
@@ -77,22 +77,6 @@ See the `default "debug"` near the top? That sets the default task to `debug`. W
 
     rote
 
-Tasks can also take arguments:
-
-```lua
-task("echo", function(message)
-    echo message
-end)
-```
-
-Running the `echo` task like this:
-
-    rote echo "Hello, future!"
-
-Will output:
-
-    Hello, future!
-
 See `rote -h` for more on command usage.
 
 
@@ -104,6 +88,17 @@ If there is a reusable component you'd like to use, but keep out of your actual 
 ```lua
 require "my_custom_module"
 ```
+
+
+## Acknowledgements
+Like most amazing software, Rote stands on the shoulders of the many who provide essential libraries and components, often a thankless job. So here's our thanks to some projects we'd like to highlight that have inspired Rote or are being used in Rote:
+
+- [The Rust Programming Language](https://www.rust-lang.org), for an excellent native programming language
+- [Lua](https://www.lua.org), for such a simple, elegant scripting language
+- [rust-lua53](https://github.com/jcmoyer/rust-lua53), for Lua 5.3 bindings for Rust
+- [term](https://github.com/Stebalien/term), for simplifying cross-platform terminal colors
+- [GNU Make](https://www.gnu.org/software/make), for starting it all
+- [Jake](http://jakejs.com), for DSL syntax inspiration
 
 
 ## License
