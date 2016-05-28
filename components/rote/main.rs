@@ -1,6 +1,7 @@
 extern crate getopts;
 extern crate glob;
 #[macro_use] extern crate log;
+extern crate num_cpus;
 extern crate regex;
 extern crate script;
 extern crate term;
@@ -188,6 +189,15 @@ fn main() {
     if matches.opt_present("always-run") {
         info!("running all tasks unconditionally");
         runner.always_run();
+    }
+
+    // Set number of jobs.
+    if let Some(jobs) = matches.opt_str("jobs") {
+        if let Ok(jobs) = jobs.parse::<u32>() {
+            runner.jobs(jobs);
+        } else {
+            warn!("invalid number of jobs");
+        }
     }
 
     // Get all of the tasks to run.

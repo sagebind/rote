@@ -1,6 +1,8 @@
 use graph::Graph;
+use num_cpus;
 use script::Environment;
 use script::task::Task;
+use std::cmp;
 use std::error::Error;
 use std::rc::Rc;
 
@@ -19,16 +21,23 @@ pub struct Runner {
 
     /// Indicates if up-to-date tasks should be run anyway.
     always_run: bool,
+
+    /// The number of threads to use.
+    jobs: u32,
 }
 
 impl Runner {
     /// Creates a new runner instance.
     pub fn new(environment: Environment) -> Runner {
+        // By default, set the number of jobs to be one less than the number of available CPU cores.
+        let jobs = cmp::max(1, num_cpus::get() - 1);
+
         Runner {
             environment: environment,
             graph: Graph::new(),
             dry_run: false,
             always_run: false,
+            jobs: jobs as u32,
         }
     }
 
@@ -45,6 +54,11 @@ impl Runner {
         self.always_run = true;
     }
 
+    /// Sets the number of threads to use to run tasks.
+    pub fn jobs(&mut self, jobs: u32) {
+        self.jobs = jobs;
+    }
+
     /// Run the default task.
     pub fn run_default(&mut self) -> Result<(), Box<Error>> {
         if let Some(ref name) = self.environment.default_task() {
@@ -56,6 +70,9 @@ impl Runner {
     }
 
     /// Runs the specified list of tasks.
+    ///
+    /// Tasks are run in parallel when possible during execution. The maximum number of parallel
+    /// jobs can be set with the `jobs()` method.
     pub fn run<S: AsRef<str>>(&mut self, tasks: &[S]) -> Result<(), Box<Error>> {
         // Resolve all tasks given.
         for task in tasks {

@@ -10,6 +10,7 @@ readme = "README.md"
 getopts = "0.2"
 glob = "0.2"
 log = "0.3"
+num_cpus = "0.2"
 regex = "0.1"
 script = { path = "../script" }
 term = "0.4"
