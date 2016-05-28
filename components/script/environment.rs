@@ -111,13 +111,15 @@ impl Environment {
         let mut state = lua::State::from_ptr(ptr);
 
         // Fetch the weak environment pointer from the registry.
-        //state.push_light_userdata(&KEY as *const _ as *mut u8);
         state.push(KEY);
         state.get_table(lua::REGISTRYINDEX);
 
         // Read the weak pointer.
         let weak = match state.to_userdata_typed::<Weak<EnvironmentStruct>>(-1) {
-            Some(weak) => weak,
+            Some(weak) => {
+                lua::State::from_ptr(ptr).pop(1);
+                weak
+            },
             None => panic!("unable to read environment pointer")
         };
 
@@ -362,6 +364,7 @@ impl Environment {
         self.state().push(name);
         self.state().push_value(-2);
         self.state().set_table(lua::REGISTRYINDEX);
+        self.state().pop(1);
     }
 }
 

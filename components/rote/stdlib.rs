@@ -75,6 +75,7 @@ fn change_dir(environment: Environment) -> ScriptResult {
 /// * `func: function`       - A function that should be called when the rule is run. (Optional)
 fn create_rule(environment: Environment) -> ScriptResult {
     let pattern = environment.state().check_string(1).to_string();
+    let mut func_index = 3;
 
     // Get the list of dependencies if given.
     let deps = if environment.state().type_of(2) == Some(lua::Type::Table) {
@@ -82,27 +83,34 @@ fn create_rule(environment: Environment) -> ScriptResult {
             .map(|mut item| item.value().unwrap())
             .collect()
     } else {
+        func_index -= 1;
         Vec::new()
     };
 
     // Get the task function if given.
+    environment.state().push_value(func_index);
     let func = if environment.state().type_of(-1) == Some(lua::Type::Function) {
         // Get a portable reference to the task function.
         Some(environment.state().reference(lua::REGISTRYINDEX))
     } else {
+        environment.state().pop(1);
         None
     };
 
     let closure_env = environment.clone();
     let callback = Rc::new(move |name: &str| {
-        // Get the function reference onto the Lua stack.
-        closure_env.state().raw_geti(lua::REGISTRYINDEX, func.unwrap().value() as i64);
+        if let Some(func) = func {
+            // Get the function reference onto the Lua stack.
+            closure_env.state().raw_geti(lua::REGISTRYINDEX, func.value() as i64);
 
-        // Push the synthesized name onto the stack.
-        closure_env.state().push(name);
+            // Push the synthesized name onto the stack.
+            closure_env.state().push(name);
 
-        // Invoke the task function.
-        closure_env.call(1, 0, 0).map(|_| ()).map_err(|e| e.into())
+            // Invoke the task function.
+            closure_env.call(1, 0, 0).map(|_| ()).map_err(|e| e.into())
+        } else {
+            Ok(())
+        }
     });
 
     environment.create_rule(Rc::new(Rule::new(pattern, deps, Some(callback))));
@@ -131,18 +139,27 @@ fn create_task(environment: Environment) -> ScriptResult {
         Vec::new()
     };
 
-    // Get a portable reference to the task function.
+    // Get the task function if given.
     environment.state().push_value(func_index);
-    environment.state().check_type(-1, lua::Type::Function);
-    let func = environment.state().reference(lua::REGISTRYINDEX);
+    let func = if environment.state().type_of(-1) == Some(lua::Type::Function) {
+        // Get a portable reference to the task function.
+        Some(environment.state().reference(lua::REGISTRYINDEX))
+    } else {
+        environment.state().pop(1);
+        None
+    };
 
     let closure_env = environment.clone();
     let callback = Box::new(move || {
-        // Get the function reference onto the Lua stack.
-        closure_env.state().raw_geti(lua::REGISTRYINDEX, func.value() as i64);
+        if let Some(func) = func {
+            // Get the function reference onto the Lua stack.
+            closure_env.state().raw_geti(lua::REGISTRYINDEX, func.value() as i64);
 
-        // Invoke the task function.
-        closure_env.call(0, 0, 0).map(|_| ()).map_err(|e| e.into())
+            // Invoke the task function.
+            closure_env.call(0, 0, 0).map(|_| ()).map_err(|e| e.into())
+        } else {
+            Ok(())
+        }
     });
 
     environment.create_task(Rc::new(NamedTask::new(name, desc, deps, Some(callback))));

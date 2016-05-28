@@ -16,6 +16,9 @@ pub struct Runner {
 
     /// Indicates if actually running tasks should be skipped.
     dry_run: bool,
+
+    /// Indicates if up-to-date tasks should be run anyway.
+    always_run: bool,
 }
 
 impl Runner {
@@ -25,6 +28,7 @@ impl Runner {
             environment: environment,
             graph: Graph::new(),
             dry_run: false,
+            always_run: false,
         }
     }
 
@@ -36,6 +40,12 @@ impl Runner {
         self.dry_run = true;
     }
 
+    /// Run all tasks even if they are up-to-date.
+    pub fn always_run(&mut self) {
+        self.always_run = true;
+    }
+
+    /// Run the default task.
     pub fn run_default(&mut self) -> Result<(), Box<Error>> {
         if let Some(ref name) = self.environment.default_task() {
             let tasks = vec![name];
@@ -53,7 +63,7 @@ impl Runner {
         }
 
         // Determine the schedule of tasks to execute.
-        let schedule = try!(self.graph.solve());
+        let schedule = try!(self.graph.solve(!self.always_run));
         debug!("need to run {} task(s)", schedule.len());
 
         for (i, task) in schedule.iter().enumerate() {

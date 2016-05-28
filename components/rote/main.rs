@@ -74,6 +74,7 @@ fn main() {
 
     // Parse command-line flags.
     let mut options = Options::new();
+    options.optflag("B", "always-run", "Unconditionally run all tasks.");
     options.optopt("C", "directory", "Change to DIRECTORY before running tasks.", "DIRECTORY");
     options.optflag("d", "dry-run", "Don't actually perform any action.");
     options.optopt("f", "file", "Read FILE as the Rotefile.", "FILE");
@@ -178,11 +179,18 @@ fn main() {
     }
 
     // Set up the task runner.
-    let mut runner = runner::Runner::new(environment);
+    let mut runner = runner::Runner::new(environment.clone());
 
     // Toggle dry run.
     if matches.opt_present("dry-run") {
+        info!("dry run is enabled; no task actions will be run");
         runner.dry_run();
+    }
+
+    // Toggle always run.
+    if matches.opt_present("always-run") {
+        info!("running all tasks unconditionally");
+        runner.always_run();
     }
 
     // Get all of the tasks to run.

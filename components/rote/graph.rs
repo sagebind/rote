@@ -39,8 +39,8 @@ impl Graph {
     ///
     /// Dependency solving is done by performing a topological sort of the entire graph using a
     /// depth-first search-based algorithm.
-    pub fn solve(&self) -> Result<VecDeque<Rc<Task>>, Box<Error>> {
-        Solver::new(&self).solve()
+    pub fn solve(&self, skip_satisfied_tasks: bool) -> Result<VecDeque<Rc<Task>>, Box<Error>> {
+        Solver::new(&self, skip_satisfied_tasks).solve()
     }
 }
 
@@ -52,15 +52,18 @@ struct Solver<'a> {
     unresolved: HashSet<Rc<Task>>,
     // Resulting queue of tasks in solved order.
     schedule: VecDeque<Rc<Task>>,
+    // Skip satisfied tasks?
+    skip_satisfied_tasks: bool,
 }
 
 impl<'a> Solver<'a> {
-    fn new<'b>(graph: &'b Graph) -> Solver<'b> {
+    fn new<'b>(graph: &'b Graph, skip_satisfied_tasks: bool) -> Solver<'b> {
         Solver {
             graph: graph,
             resolved: HashSet::new(),
             unresolved: HashSet::new(),
             schedule: VecDeque::new(),
+            skip_satisfied_tasks: skip_satisfied_tasks,
         }
     }
 
@@ -80,7 +83,7 @@ impl<'a> Solver<'a> {
     fn resolve(&mut self, task: Rc<Task>) -> Result<(), Box<Error>> {
         // First, check if the task is already satisfied. If it is, it and its dependencies do not
         // need to run and we can skip this task in the schedule.
-        if try!(self.satisfied(task.clone())) {
+        if self.skip_satisfied_tasks && try!(self.satisfied(task.clone())) {
             info!("task '{}' is up to date", task.name());
             self.resolved.insert(task.clone());
             return Ok(());
