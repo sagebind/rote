@@ -41,10 +41,10 @@ pub struct NamedTask {
 }
 
 impl NamedTask {
-    pub fn new(name: String, description: Option<String>, deps: Vec<String>, action: Option<Box<Fn() -> Result<(), Box<Error>>>>) -> NamedTask {
+    pub fn new<S: Into<String>>(name: S, description: Option<S>, deps: Vec<String>, action: Option<Box<Fn() -> Result<(), Box<Error>>>>) -> NamedTask {
         NamedTask {
-            name: name,
-            description: description,
+            name: name.into(),
+            description: description.map(|s| s.into()),
             deps: deps,
             action: action,
         }

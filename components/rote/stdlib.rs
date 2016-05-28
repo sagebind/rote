@@ -401,6 +401,8 @@ fn version(environment: Environment) -> ScriptResult {
 
 /// Makes the standard Rote module functions available in the environment.
 pub fn open_lib(environment: Environment) {
+    trace!("opening standard module...");
+
     // Load the module functions.
     environment.register_lib(&[
         ("change_dir", change_dir),

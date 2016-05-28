@@ -30,14 +30,14 @@ impl Rule {
     }
 
     /// Checks if a file name matches the rule.
-    pub fn matches(&self, name: &str) -> bool {
+    pub fn matches<S: AsRef<str>>(&self, name: S) -> bool {
         if let Some(index) = self.pattern.find("%") {
             let (prefix, suffix) = self.pattern.split_at(index);
             let suffix = &suffix[1..];
 
-            name.starts_with(prefix) && name.ends_with(suffix)
+            name.as_ref().starts_with(prefix) && name.as_ref().ends_with(suffix)
         } else {
-            &self.pattern == name
+            &self.pattern == name.as_ref()
         }
     }
 

@@ -15,10 +15,10 @@ mod graph;
 use getopts::Options;
 use lazysort::SortedBy;
 use script::Environment;
+use script::task::Task;
 use std::env;
 use std::path;
 use std::process;
-use script::task::{NamedTask, Task};
 
 
 // Define some global constants for various metadata.
@@ -149,9 +149,7 @@ fn main() {
         process::exit(1);
     }
 
-    trace!("opening standard module...");
     stdlib::open_lib(environment.clone());
-    trace!("opening standard module...done");
 
     // Load the script.
     if let Err(e) = environment.load() {
@@ -165,18 +163,24 @@ fn main() {
         return;
     }
 
-    // Get all of the task arguments.
-    let mut args = matches.free.clone();
+    // Set up the task runner.
+    let mut runner = runner::Runner::new(environment);
+
+    // Toggle dry run.
+    if matches.opt_present("dry-run") {
+        runner.dry_run();
+    }
+
+    // Get all of the tasks to run.
+    let tasks = matches.free;
 
     // Run the specified task, or the default if none is specified.
-    let mut runner = runner::Runner::new(environment);
     if let Err(e) = {
-        if args.is_empty() {
+        if tasks.is_empty() {
             runner.run_default()
         } else {
-            // Run the specified task.
-            let task_name = args.remove(0);
-            runner.run(&task_name)
+            // Run the specified tasks.
+            runner.run(&tasks)
         }
     } {
         error!("{}", e);
