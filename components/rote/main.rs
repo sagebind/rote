@@ -193,7 +193,7 @@ fn main() {
 
     // Set number of jobs.
     if let Some(jobs) = matches.opt_str("jobs") {
-        if let Ok(jobs) = jobs.parse::<u32>() {
+        if let Ok(jobs) = jobs.parse::<usize>() {
             runner.jobs(jobs);
         } else {
             warn!("invalid number of jobs");

@@ -3,8 +3,12 @@ use num_cpus;
 use script::Environment;
 use script::task::Task;
 use std::cmp;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::rc::Rc;
+use std::sync::mpsc::channel;
+use std::thread;
+use stdlib;
 
 
 /// A task runner object that holds the state for defined tasks, dependencies, and the scripting
@@ -23,7 +27,7 @@ pub struct Runner {
     always_run: bool,
 
     /// The number of threads to use.
-    jobs: u32,
+    jobs: usize,
 }
 
 impl Runner {
@@ -37,7 +41,7 @@ impl Runner {
             graph: Graph::new(),
             dry_run: false,
             always_run: false,
-            jobs: jobs as u32,
+            jobs: jobs as usize,
         }
     }
 
@@ -55,7 +59,7 @@ impl Runner {
     }
 
     /// Sets the number of threads to use to run tasks.
-    pub fn jobs(&mut self, jobs: u32) {
+    pub fn jobs(&mut self, jobs: usize) {
         self.jobs = jobs;
     }
 
@@ -80,19 +84,144 @@ impl Runner {
         }
 
         // Determine the schedule of tasks to execute.
-        let schedule = try!(self.graph.solve(!self.always_run));
-        debug!("need to run {} task(s)", schedule.len());
+        let mut schedule = try!(self.graph.solve(!self.always_run));
+        let task_count = schedule.len();
+        let thread_count = cmp::min(self.jobs, task_count);
 
-        for (i, task) in schedule.iter().enumerate() {
-            println!("[{}/{}] {}", i + 1, schedule.len(), task.name());
+        debug!("running {} task(s) across {} thread(s)", task_count, thread_count);
 
-            // Check for dry run.
-            if !self.dry_run {
-                try!(task.run());
-            } else {
-                info!("would run task '{}'", task.name());
+        // Spawn one thread for each job.
+        let mut threads = Vec::new();
+        let mut free_threads: HashSet<usize> = HashSet::new();
+        let mut channels = Vec::new();
+        let (sender, receiver) = channel::<usize>();
+
+        // Spawn `jobs` number of threads (but no more than the task count!).
+        for thread_id in 0..thread_count {
+            let path = self.environment.path().to_path_buf();
+            let dry_run = self.dry_run;
+            let thread_sender = sender.clone();
+
+            let (parent_sender, thread_receiver) = channel::<String>();
+            channels.push(parent_sender);
+
+            free_threads.insert(thread_id);
+            threads.push(thread::spawn(move || {
+                // Prepare a new environment.
+                let environment = Environment::new(path).unwrap_or_else(|e| {
+                    error!("{}", e);
+                    panic!();
+                });
+
+                // Open standard library functions.
+                stdlib::open_lib(environment.clone());
+
+                // Load the script.
+                if let Err(e) = environment.load() {
+                    error!("{}", e);
+                    panic!();
+                }
+
+                thread_sender.send(thread_id).unwrap();
+
+                // Begin executing tasks!
+                while let Ok(name) = thread_receiver.recv() {
+                    // Lookup the task to run.
+                    let task = {
+                        // Lookup the task to run.
+                        if let Some(task) = environment.get_task(&name) {
+                            task as Rc<Task>
+                        }
+
+                        // Find a rule that matches the task name.
+                        else if let Some(rule) = environment.rules().iter().find(|rule| rule.matches(&name)) {
+                            Rc::new(rule.create_task(name).unwrap()) as Rc<Task>
+                        }
+
+                        // No matching task.
+                        else {
+                            panic!("no matching task or rule for '{}'", name);
+                        }
+                    };
+
+                    // Check for dry run.
+                    if !dry_run {
+                        if let Err(e) = task.run() {
+                            error!("{}", e);
+                            panic!();
+                        }
+                    } else {
+                        info!("would run task '{}'", task.name());
+                    }
+
+                    thread_sender.send(thread_id).unwrap_or(());
+                }
+            }))
+        }
+
+        drop(sender);
+
+        // Keep track of tasks completed and tasks in progress.
+        let mut completed_tasks: HashSet<String> = HashSet::new();
+        let mut current_tasks: HashMap<usize, String> = HashMap::new();
+
+        while !schedule.is_empty() {
+            // Wait for a thread to request a task.
+            let thread_id = receiver.recv().unwrap();
+            free_threads.insert(thread_id);
+            trace!("thread {} is idle", thread_id);
+
+            // If the thread was previously running a task, mark it as completed.
+            if let Some(task) = current_tasks.remove(&thread_id) {
+                trace!("task {} completed", task);
+                completed_tasks.insert(task);
+            }
+
+            // On the last thread, the schedule will be empty.
+            if schedule.is_empty() {
+                break;
+            }
+
+            // Attempt to schedule more tasks to run. The most we can schedule is the number of free
+            // threads, but it is limited by the number of tasks that have their dependencies already
+            // finished.
+            for _ in 0..free_threads.len() {
+                // Check the next task in the queue.
+                if schedule.len() > 0 && schedule.front().unwrap().dependencies().iter().all(|d| {
+                    completed_tasks.contains(d) || schedule.iter().find(|a| a.name() == d).is_none()
+                }) {
+                    // Pop the available task from the queue.
+                    let task = schedule.pop_front().unwrap();
+
+                    println!("[{}/{}] {}", task_count - schedule.len(), task_count, task.name());
+
+                    // Pick a free thread to run the task in.
+                    if let Some(thread_id) = free_threads.iter().next().map(|t| *t) {
+                        trace!("scheduling task '{}' on thread {}", task.name(), thread_id);
+
+                        current_tasks.insert(thread_id, task.name().to_string());
+                        free_threads.remove(&thread_id);
+                        channels[thread_id].send(task.name().to_string()).unwrap();
+                    } else {
+                        // We can schedule now, but there aren't any free threads. 😢
+                        break;
+                    }
+                } else {
+                    // We can't run the next task, so we're done scheduling for now until another
+                    // thread finishes.
+                    break;
+                }
             }
         }
+
+        trace!("all tasks scheduled");
+
+        // Close the threads and channels.
+        drop(channels);
+        drop(receiver);
+
+        // Wait for the threads to finish.
+        threads.into_iter().map(|t| t.join()).collect::<Vec<_>>();
 
         Ok(())
     }
