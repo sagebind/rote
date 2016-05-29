@@ -1,42 +1,18 @@
 # ![Rote](/docs/logo.png?raw=true)
 ##### Automate everything.
 
-**This is highly experimental. Expect anything to change at any time.**
-
 [![Build Status](https://img.shields.io/travis/coderstephen/rote.svg)](https://travis-ci.org/coderstephen/rote) [![Release](https://img.shields.io/github/release/coderstephen/rote.svg)]() [![Downloads](https://img.shields.io/github/downloads/coderstephen/rote/total.svg)]()
 
-Rote is an experimental task runner and build tool designed to be easy to use, portable, and fast. Rote uses [Lua](http://www.lua.org) as a configuration syntax. You do not need to be familiar with Lua to use Rote; the syntax is very simple to understand!
-
-
-## Really? *Another* build tool?
-The ecosystem for build and task tools is already so saturated that Rote can hardly offer anything new, right? Actually, that is the point of Rote entirely. Rote *intentionally* has less features than other tools like Ant or CMake, because too many features can make a build tool too complicated or slow.
-
-The idea for Rote came from the failures of other existing tools. Here are just a few of the common issues:
-
-- Nonstandard file formats or confusing configuration syntaxes.
-- Making you write verbose code instead of defining tasks.
-- Non-native tools themselves depend on interpreters to be installed, like Node.js, Python, or Ruby. This introduces additional complexity that does not come from a project itself, but with the build tool.
-
-For more insulting comparisons to your favorite tool, here is a lengthier list:
-
-- Make is lightweight and simple, but has a horrible, confusing syntax.
-- Autotools are built on Make, but are the opposite of simple.
-- Ant uses XML, which is incredibly verbose for even simple tasks. Plus XML isn't designed for logic.
-- Phing is basically a PHP clone of Ant, so it inherits all the problems of Ant.
-- Rake is written in Ruby.
-- Grunt is a huge beast of a program.
-- CMake? lol.
+Rote is a multi-threaded task runner and build tool designed to be easy to use, portable, and fast. Automate your entire development workflow using Rote's scriptable task system to implement builds, deployment, and maintenance using a unified script syntax.
 
 
 ## Features
 - Ridiculously fast.
+- Task parallelization with threading.
+- Incremental builds.
 - Scriptable runtime.
 - Familiar syntax that doesn't get in your way when you need to do some logic in your build.
-
-
-## Goals
 - Completely portable binary with no system dependencies.
-- Build parallelization with threading.
 
 
 ## Compiling
@@ -69,6 +45,8 @@ task("clean", function()
 end)
 ```
 
+Rote uses [Lua](http://www.lua.org) as a configuration syntax. You do not need to be familiar with Lua to use Rote; the syntax is very simple to understand!
+
 Now to execute the `debug` task, we can run `rote debug`. Rote will look for the `Rotefile` in the current directory. If the file is in a different directory or has a different name, you can use the `-f` flag to specify a different location:
 
     rote -f my/Rotefile debug
@@ -88,6 +66,26 @@ If there is a reusable component you'd like to use, but keep out of your actual 
 ```lua
 require "my_custom_module"
 ```
+
+
+## Really? *Another* build tool?
+The ecosystem for build and task tools is already so saturated that Rote can hardly offer anything new, right? Actually, that is the point of Rote entirely. Rote *intentionally* has less features than other tools like Ant or CMake, because too many features can make a build tool too complicated or slow.
+
+The idea for Rote came from the failures of other existing tools. Here are just a few of the common issues:
+
+- Nonstandard file formats or confusing configuration syntaxes.
+- Making you write verbose code instead of defining tasks.
+- Non-native tools themselves depend on interpreters to be installed, like Node.js, Python, or Ruby. This introduces additional complexity that does not come from a project itself, but with the build tool.
+
+For more insulting comparisons to your favorite tool, here is a lengthier list:
+
+- Make is lightweight and simple, but has a horrible, confusing syntax.
+- Autotools are built on Make, but are the opposite of simple.
+- Ant uses XML, which is incredibly verbose for even simple tasks. Plus XML isn't designed for logic.
+- Phing is basically a PHP clone of Ant, so it inherits all the problems of Ant.
+- Rake is written in Ruby.
+- Grunt is a huge beast of a program.
+- CMake? lol.
 
 
 ## Acknowledgements
