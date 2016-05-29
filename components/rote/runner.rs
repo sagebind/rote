@@ -102,7 +102,7 @@ impl Runner {
             let dry_run = self.dry_run;
             let thread_sender = sender.clone();
 
-            let (parent_sender, thread_receiver) = channel::<String>();
+            let (parent_sender, thread_receiver) = channel::<(String, usize)>();
             channels.push(parent_sender);
 
             free_threads.insert(thread_id);
@@ -122,10 +122,14 @@ impl Runner {
                     panic!();
                 }
 
-                thread_sender.send(thread_id).unwrap();
+                if thread_sender.send(thread_id).is_err() {
+                    trace!("thread {} failed to send channel", thread_id);
+                }
 
                 // Begin executing tasks!
-                while let Ok(name) = thread_receiver.recv() {
+                while let Ok((name, task_id)) = thread_receiver.recv() {
+                    println!("[{}/{}] {}", task_id, task_count, name);
+
                     // Lookup the task to run.
                     let task = {
                         // Lookup the task to run.
@@ -154,7 +158,10 @@ impl Runner {
                         info!("would run task '{}'", task.name());
                     }
 
-                    thread_sender.send(thread_id).unwrap_or(());
+                    if thread_sender.send(thread_id).is_err() {
+                        trace!("thread {} failed to send channel", thread_id);
+                        break;
+                    }
                 }
             }))
         }
@@ -164,6 +171,7 @@ impl Runner {
         // Keep track of tasks completed and tasks in progress.
         let mut completed_tasks: HashSet<String> = HashSet::new();
         let mut current_tasks: HashMap<usize, String> = HashMap::new();
+        let all_tasks: HashSet<String> = schedule.iter().map(|s| s.name().to_string()).collect();
 
         while !schedule.is_empty() {
             // Wait for a thread to request a task.
@@ -177,51 +185,56 @@ impl Runner {
                 completed_tasks.insert(task);
             }
 
-            // On the last thread, the schedule will be empty.
-            if schedule.is_empty() {
-                break;
-            }
-
             // Attempt to schedule more tasks to run. The most we can schedule is the number of free
             // threads, but it is limited by the number of tasks that have their dependencies already
             // finished.
-            for _ in 0..free_threads.len() {
-                // Check the next task in the queue.
-                if schedule.len() > 0 && schedule.front().unwrap().dependencies().iter().all(|d| {
-                    completed_tasks.contains(d) || schedule.iter().find(|a| a.name() == d).is_none()
-                }) {
-                    // Pop the available task from the queue.
-                    let task = schedule.pop_front().unwrap();
+            'schedule: for _ in 0..free_threads.len() {
+                // If the schedule is empty, we are done.
+                if schedule.is_empty() {
+                    break;
+                }
 
-                    println!("[{}/{}] {}", task_count - schedule.len(), task_count, task.name());
+                // Check the next task in the queue. If any of its dependencies have not yet been
+                // completed, we cannot schedule it yet.
+                for dependency in schedule.front().unwrap().dependencies() {
+                    // Check that the dependency needs scheduled at all (some are already satisfied),
+                    // and that it hasn't already finished.
+                    if all_tasks.contains(dependency) && !completed_tasks.contains(dependency) {
+                        // We can't run the next task, so we're done scheduling for now until another
+                        // thread finishes.
+                        break 'schedule;
+                    }
+                }
 
-                    // Pick a free thread to run the task in.
-                    if let Some(thread_id) = free_threads.iter().next().map(|t| *t) {
-                        trace!("scheduling task '{}' on thread {}", task.name(), thread_id);
+                // Pop the available task from the queue.
+                let task = schedule.pop_front().unwrap();
 
+                // Pick a free thread to run the task in.
+                if let Some(thread_id) = free_threads.iter().next().map(|t| *t) {
+                    trace!("scheduling task '{}' on thread {}", task.name(), thread_id);
+                    let data = (task.name().to_string(), task_count - schedule.len());
+
+                    // Send the task name.
+                    if channels[thread_id].send(data).is_ok() {
                         current_tasks.insert(thread_id, task.name().to_string());
                         free_threads.remove(&thread_id);
-                        channels[thread_id].send(task.name().to_string()).unwrap();
                     } else {
-                        // We can schedule now, but there aren't any free threads. 😢
-                        break;
+                        trace!("failed to send channel to thread {}", thread_id);
                     }
                 } else {
-                    // We can't run the next task, so we're done scheduling for now until another
-                    // thread finishes.
+                    // We can schedule now, but there aren't any free threads. 😢
                     break;
                 }
             }
         }
 
-        trace!("all tasks scheduled");
-
-        // Close the threads and channels.
+        // Close the input and wait for any remaining threads to finish.
         drop(channels);
-        drop(receiver);
-
-        // Wait for the threads to finish.
-        threads.into_iter().map(|t| t.join()).collect::<Vec<_>>();
+        for (thread_id, thread) in threads.into_iter().enumerate() {
+            if let Err(e) = thread.join() {
+                trace!("thread {} closed with panic: {:?}", thread_id, e);
+            }
+        }
 
         Ok(())
     }
