@@ -13,7 +13,6 @@ mod stdlib;
 
 use getopts::Options;
 use runner::Runner;
-use script::Environment;
 use script::task::Task;
 use std::env;
 use std::path;
@@ -164,6 +163,12 @@ fn main() {
     if matches.opt_present("run-all") {
         info!("running all tasks unconditionally");
         runner.always_run();
+    }
+
+    // Toggle keep going.
+    if matches.opt_present("keep-going") {
+        info!("errors will be ignored");
+        runner.keep_going();
     }
 
     // Set number of jobs.
