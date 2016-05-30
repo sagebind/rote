@@ -96,7 +96,8 @@ Like most amazing software, Rote stands on the shoulders of the many who provide
 - [rust-lua53](https://github.com/jcmoyer/rust-lua53), for Lua 5.3 bindings for Rust
 - [term](https://github.com/Stebalien/term), for simplifying cross-platform terminal colors
 - [GNU Make](https://www.gnu.org/software/make), for starting it all
-- [Jake](http://jakejs.com), for DSL syntax inspiration
+- [Jake](http://jakejs.com), for script syntax inspiration
+- [Cake](http://cakebuild.net), for script syntax inspiration
 
 
 ## License
