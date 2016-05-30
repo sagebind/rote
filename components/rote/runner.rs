@@ -5,57 +5,134 @@ use script::task::Task;
 use std::cmp;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::mpsc::channel;
 use std::thread;
 use stdlib;
+use term;
 
 
-/// A task runner object that holds the state for defined tasks, dependencies, and the scripting
-/// runtime.
-pub struct Runner {
-    /// The script environment.
-    environment: Environment,
+#[derive(Clone)]
+pub struct EnvironmentSpec {
+    /// Script path.
+    path: PathBuf,
 
-    /// The current DAG for tasks.
-    graph: Graph,
+    /// Script directory.
+    directory: PathBuf,
+
+    /// Module include paths.
+    include_paths: Vec<PathBuf>,
+
+    /// Global environment variables.
+    variables: Vec<(String, String)>,
 
     /// Indicates if actually running tasks should be skipped.
     dry_run: bool,
 
     /// Indicates if up-to-date tasks should be run anyway.
     always_run: bool,
+}
+
+impl EnvironmentSpec {
+    /// Creates an environment from the environment specification.
+    pub fn create(&self) -> Result<Environment, Box<Error>> {
+        // Prepare a new environment.
+        let environment = try!(Environment::new(self.path.clone()));
+
+        // Open standard library functions.
+        environment.state().open_libs();
+        stdlib::open_lib(environment.clone());
+
+        // Set include paths.
+        for path in &self.include_paths {
+            environment.include_path(&path);
+        }
+
+        // Set the OS
+        environment.state().push_string(if cfg!(windows) {
+            "windows"
+        } else {
+            "unix"
+        });
+        environment.state().set_global("OS");
+
+        // Set configured variables.
+        for &(ref name, ref value) in &self.variables {
+            environment.set_var(&name, value.clone());
+        }
+
+        // Load the script.
+        try!(environment.load());
+
+        Ok(environment)
+    }
+}
+
+/// A task runner object that holds the state for defined tasks, dependencies, and the scripting
+/// runtime.
+pub struct Runner {
+    /// The current DAG for tasks.
+    graph: Graph,
 
     /// The number of threads to use.
     jobs: usize,
+
+    /// Environment specification.
+    spec: EnvironmentSpec,
+
+    /// Environment local owned by the master thread.
+    environment: Option<Environment>,
 }
 
 impl Runner {
     /// Creates a new runner instance.
-    pub fn new(environment: Environment) -> Runner {
+    pub fn new<P: Into<PathBuf>>(path: P) -> Result<Runner, Box<Error>> {
         // By default, set the number of jobs to be one less than the number of available CPU cores.
         let jobs = cmp::max(1, num_cpus::get() - 1);
 
-        Runner {
-            environment: environment,
+        let path = path.into();
+        let directory: PathBuf = match path.parent() {
+            Some(path) => path.into(),
+            None => {
+                return Err("failed to parse script directory".into());
+            }
+        };
+
+        Ok(Runner {
             graph: Graph::new(),
-            dry_run: false,
-            always_run: false,
             jobs: jobs as usize,
-        }
+            spec: EnvironmentSpec {
+                path: path.into(),
+                directory: directory,
+                include_paths: Vec::new(),
+                variables: Vec::new(),
+                dry_run: false,
+                always_run: false,
+            },
+            environment: None,
+        })
     }
 
-    /// Sets the runner to "dry run" mode.
+    pub fn path(&self) -> &Path {
+        &self.spec.path
+    }
+
+    pub fn directory(&self) -> &Path {
+        &self.spec.directory
+    }
+
+    /// Sets "dry run" mode.
     ///
     /// When in "dry run" mode, running tasks will operate as normal, except that no task's actions
     /// will be actually run.
     pub fn dry_run(&mut self) {
-        self.dry_run = true;
+        self.spec.dry_run = true;
     }
 
     /// Run all tasks even if they are up-to-date.
     pub fn always_run(&mut self) {
-        self.always_run = true;
+        self.spec.always_run = true;
     }
 
     /// Sets the number of threads to use to run tasks.
@@ -63,9 +140,54 @@ impl Runner {
         self.jobs = jobs;
     }
 
+    /// Adds a path to Lua's require path for modules.
+    pub fn include_path<P: Into<PathBuf>>(&mut self, path: P) {
+        self.spec.include_paths.push(path.into());
+    }
+
+    /// Sets a variable value.
+    pub fn set_var<S: AsRef<str>, V: Into<String>>(&mut self, name: S, value: V) {
+        self.spec.variables.push((name.as_ref().to_string(), value.into()));
+    }
+
+    /// Load the script.
+    pub fn load(&mut self) -> Result<(), Box<Error>> {
+        if self.environment.is_none() {
+            self.environment = Some(try!(self.spec.create()));
+        }
+
+        Ok(())
+    }
+
+    /// Prints the list of named tasks for a script.
+    pub fn print_task_list(&mut self) {
+        let mut tasks = self.environment().tasks();
+        tasks.sort_by(|a, b| a.name().cmp(b.name()));
+
+        let mut out = term::stdout().unwrap();
+        println!("Available tasks:");
+
+        for task in tasks {
+            out.fg(term::color::BRIGHT_GREEN).unwrap();
+            write!(out, "  {:16}", task.name()).unwrap();
+            out.reset().unwrap();
+
+            if let Some(ref description) = task.description() {
+                write!(out, "{}", description).unwrap();
+            }
+
+            writeln!(out, "").unwrap();
+        }
+
+        if let Some(ref default) = self.environment().default_task() {
+            println!("");
+            println!("Default task: {}", default);
+        }
+    }
+
     /// Run the default task.
     pub fn run_default(&mut self) -> Result<(), Box<Error>> {
-        if let Some(ref name) = self.environment.default_task() {
+        if let Some(ref name) = self.environment().default_task() {
             let tasks = vec![name];
             self.run(&tasks)
         } else {
@@ -84,7 +206,7 @@ impl Runner {
         }
 
         // Determine the schedule of tasks to execute.
-        let mut schedule = try!(self.graph.solve(!self.always_run));
+        let mut schedule = try!(self.graph.solve(!self.spec.always_run));
         let task_count = schedule.len();
         let thread_count = cmp::min(self.jobs, task_count);
 
@@ -98,8 +220,7 @@ impl Runner {
 
         // Spawn `jobs` number of threads (but no more than the task count!).
         for thread_id in 0..thread_count {
-            let path = self.environment.path().to_path_buf();
-            let dry_run = self.dry_run;
+            let spec = self.spec.clone();
             let thread_sender = sender.clone();
 
             let (parent_sender, thread_receiver) = channel::<(String, usize)>();
@@ -108,19 +229,10 @@ impl Runner {
             free_threads.insert(thread_id);
             threads.push(thread::spawn(move || {
                 // Prepare a new environment.
-                let environment = Environment::new(path).unwrap_or_else(|e| {
+                let environment = spec.create().unwrap_or_else(|e| {
                     error!("{}", e);
                     panic!();
                 });
-
-                // Open standard library functions.
-                stdlib::open_lib(environment.clone());
-
-                // Load the script.
-                if let Err(e) = environment.load() {
-                    error!("{}", e);
-                    panic!();
-                }
 
                 if thread_sender.send(thread_id).is_err() {
                     trace!("thread {} failed to send channel", thread_id);
@@ -149,7 +261,7 @@ impl Runner {
                     };
 
                     // Check for dry run.
-                    if !dry_run {
+                    if !spec.dry_run {
                         if let Err(e) = task.run() {
                             error!("{}", e);
                             panic!();
@@ -242,13 +354,13 @@ impl Runner {
     fn resolve_task<S: AsRef<str>>(&mut self, name: S) -> Result<(), Box<Error>> {
         if !self.graph.contains(&name) {
             // Lookup the task to run.
-            if let Some(task) = self.environment.get_task(&name) {
+            if let Some(task) = self.environment().get_task(&name) {
                 debug!("task '{}' matches named task", name.as_ref());
                 self.graph.insert(task.clone());
             }
 
             // Find a rule that matches the task name.
-            else if let Some(rule) = self.environment.rules().iter().find(|rule| rule.matches(&name)) {
+            else if let Some(rule) = self.environment().rules().iter().find(|rule| rule.matches(&name)) {
                 debug!("task '{}' matches rule '{}'", name.as_ref(), rule.pattern);
                 // Create a task for the rule and insert it in the graph.
                 self.graph.insert(Rc::new(rule.create_task(name.as_ref()).unwrap()));
@@ -267,5 +379,9 @@ impl Runner {
         }
 
         Ok(())
+    }
+
+    fn environment(&self) -> Environment {
+        self.environment.as_ref().unwrap().clone()
     }
 }

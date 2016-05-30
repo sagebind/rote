@@ -12,24 +12,13 @@ mod runner;
 mod stdlib;
 
 use getopts::Options;
+use runner::Runner;
 use script::Environment;
 use script::task::Task;
 use std::env;
 use std::path;
 use std::process;
 
-
-// Define some global constants for various metadata.
-const ROTE_TITLE: &'static str = "
-   ▄████████  ▄██████▄      ███        ▄████████
-  ███    ███ ███    ███ ▀█████████▄   ███    ███
-  ███    ███ ███    ███    ▀███▀▀██   ███    █▀
- ▄███▄▄▄▄██▀ ███    ███     ███   ▀  ▄███▄▄▄
-▀▀███▀▀▀▀▀   ███    ███     ███     ▀▀███▀▀▀
-▀███████████ ███    ███     ███       ███    █▄
-  ███    ███ ███    ███     ███       ███    ███
-  ███    ███  ▀██████▀     ▄████▀     ██████████
-  ███    ███\n";
 
 const ROTE_VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
@@ -38,33 +27,21 @@ const ROTE_VERSION: &'static str = env!("CARGO_PKG_VERSION");
 fn print_usage(options: Options) {
     let short_usage = options.short_usage("rote");
 
-    print!("{}\r\n{}", ROTE_TITLE, options.usage(&short_usage));
-}
+    println!("
+   ▄████████  ▄██████▄      ███        ▄████████
+  ███    ███ ███    ███ ▀█████████▄   ███    ███
+  ███    ███ ███    ███    ▀███▀▀██   ███    █▀
+ ▄███▄▄▄▄██▀ ███    ███     ███   ▀  ▄███▄▄▄
+▀▀███▀▀▀▀▀   ███    ███     ███     ▀▀███▀▀▀
+▀███████████ ███    ███     ███       ███    █▄
+  ███    ███ ███    ███     ███       ███    ███
+  ███    ███  ▀██████▀     ▄████▀     ██████████
+  ███    ███
 
-/// Prints the list of named tasks for a script.
-fn print_task_list(environment: &Environment) {
-    let mut tasks = environment.tasks();
-    tasks.sort_by(|a, b| a.name().cmp(b.name()));
-
-    let mut out = term::stdout().unwrap();
-    println!("Available tasks:");
-
-    for task in tasks {
-        out.fg(term::color::BRIGHT_GREEN).unwrap();
-        write!(out, "  {:16}", task.name()).unwrap();
-        out.reset().unwrap();
-
-        if let Some(ref description) = task.description() {
-            write!(out, "{}", description).unwrap();
-        }
-
-        writeln!(out, "").unwrap();
-    }
-
-    if let Some(ref default) = environment.default_task() {
-        println!("");
-        println!("Default task: {}", default);
-    }
+{}
+Report issues at <https://github.com/coderstephen/rote/issues>.
+Rote home page: <https://github.com/coderstephen/rote>"
+    , options.usage(&short_usage));
 }
 
 /// Parses command-line options and runs retest.
@@ -73,17 +50,19 @@ fn main() {
 
     // Parse command-line flags.
     let mut options = Options::new();
-    options.optflag("B", "always-run", "Unconditionally run all tasks.");
+    options.optflag("B", "run-all", "Unconditionally run all tasks, including those up-to-date.");
     options.optopt("C", "directory", "Change to DIRECTORY before running tasks.", "DIRECTORY");
-    options.optflag("d", "dry-run", "Don't actually perform any action.");
+    options.optmulti("D", "var", "Override a variable value.", "NAME=VALUE");
     options.optopt("f", "file", "Read FILE as the Rotefile.", "FILE");
-    options.optflag("h", "help", "Print this help menu and exit.");
+    options.optflag("h", "help", "Print this help message and exit.");
+    options.optmulti("I", "include-path", "Include PATH in the search path for modules.", "PATH");
     options.optopt("j", "jobs", "The number of jobs to run simultaneously.", "N");
-    options.optflag("l", "list", "List available tasks.");
+    options.optflag("k", "keep-going", "Keep going if some tasks fail.");
+    options.optflag("l", "list", "List all tasks and exit.");
+    options.optflag("n", "dry-run", "Simulate running tasks without executing them.");
     options.optflag("q", "quiet", "Supress all non-task output.");
-    options.optmulti("s", "set", "Override a variable value.", "VAR=VALUE");
-    options.optflag("V", "version", "Print the program version and exit.");
     options.optflagmulti("v", "verbose", "Enable verbose logging.");
+    options.optflag("V", "version", "Print the program version and exit.");
 
     let matches = options.parse(&args[1..]).unwrap_or_else(|err| {
         logger::init(logger::Filter::Error).unwrap();
@@ -115,7 +94,7 @@ fn main() {
 
     // If the version flag is present, show the program version.
     if matches.opt_present("version") {
-        println!("Rote version {}", ROTE_VERSION);
+        println!("Rote {}", ROTE_VERSION);
         return;
     }
 
@@ -136,48 +115,44 @@ fn main() {
             process::exit(1);
         });
 
-    // Set up the environment.
-    let environment = Environment::new(path).unwrap_or_else(|e| {
+    // Create a new task runner.
+    let mut runner = Runner::new(path).unwrap_or_else(|e| {
         error!("{}", e);
         process::exit(1);
     });
 
-    info!("build file: {}", environment.path().to_string_lossy());
+    info!("build file: {}", runner.path().to_string_lossy());
 
     // Set the new current directory to the directory containing the Rotefile.
-    if env::set_current_dir(environment.directory()).is_err() {
-        error!("failed to change directory to '{}'", environment.directory().to_string_lossy());
+    if env::set_current_dir(runner.directory()).is_err() {
+        error!("failed to change directory to '{}'", runner.directory().to_string_lossy());
         process::exit(1);
     }
 
-    // Open standard library functions.
-    stdlib::open_lib(environment.clone());
-
-    // Load the script.
-    if let Err(e) = environment.load() {
-        error!("{}", e);
-        process::exit(1);
+    // Set include path.
+    runner.include_path("/usr/lib/rote/plugins");
+    if let Some(path) = env::current_exe().ok()
+        .and_then(|path| path.parent()
+            .map(|p| p.to_path_buf())
+        ) {
+        runner.include_path(path.to_str().unwrap());
     }
 
-    // List all tasks instead of running one.
-    if matches.opt_present("list") {
-        print_task_list(&environment);
-        return;
+    // User-specified paths.
+    for value in matches.opt_strs("include-path") {
+        runner.include_path(value);
     }
 
     // Set environment variables.
-    for value in matches.opt_strs("set") {
+    for value in matches.opt_strs("var") {
         let parts: Vec<_> = value.split('=').collect();
 
         if parts.len() != 2 {
             warn!("invalid variable syntax: '{}'", value);
         } else {
-            environment.set_var(parts[0], parts[1]);
+            runner.set_var(parts[0], parts[1]);
         }
     }
-
-    // Set up the task runner.
-    let mut runner = runner::Runner::new(environment.clone());
 
     // Toggle dry run.
     if matches.opt_present("dry-run") {
@@ -186,7 +161,7 @@ fn main() {
     }
 
     // Toggle always run.
-    if matches.opt_present("always-run") {
+    if matches.opt_present("run-all") {
         info!("running all tasks unconditionally");
         runner.always_run();
     }
@@ -198,6 +173,18 @@ fn main() {
         } else {
             warn!("invalid number of jobs");
         }
+    }
+
+    // Load the script.
+    if let Err(e) = runner.load() {
+        error!("{}", e);
+        process::exit(1);
+    }
+
+    // List all tasks instead of running one.
+    if matches.opt_present("list") {
+        runner.print_task_list();
+        return;
     }
 
     // Get all of the tasks to run.

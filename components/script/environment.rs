@@ -67,21 +67,6 @@ impl Environment {
             state: lua::State::new(),
         }));
 
-        // Initialize the standard Lua libraries.
-        environment.state().open_libs();
-
-        // Set up the environment.
-        environment.add_path("./components/?.lua");
-        environment.add_cpath("/usr/lib/rote/plugins/?.so");
-
-        if let Some(mut path) = env::current_exe().ok()
-            .and_then(|path| path.parent()
-                .map(|p| p.to_path_buf())
-            ) {
-            path.push("lib?.so");
-            environment.add_cpath(path.to_str().unwrap());
-        }
-
         // Create a weak pointer to the environment and push it into the registry so that you can
         // access the environment object by its Lua state.
         environment.state().push(KEY);
@@ -91,14 +76,6 @@ impl Environment {
             ptr::write(ptr, weak);
         }
         environment.state().set_table(lua::REGISTRYINDEX);
-
-        // Set the OS
-        environment.state().push_string(if cfg!(windows) {
-            "windows"
-        } else {
-            "unix"
-        });
-        environment.state().set_global("OS");
 
         Ok(environment)
     }
@@ -227,6 +204,36 @@ impl Environment {
         self.state().set_global(name.as_ref());
     }
 
+    /// Adds a path to Lua's require path for modules.
+    pub fn include_path<P: Into<PathBuf>>(&self, path: P) {
+        let mut lua_path = path.into();
+        let mut native_path = lua_path.clone();
+        lua_path.push("?.lua");
+        native_path.push("?.so");
+
+        self.state().get_global("package");
+
+        // Set the Lua file path.
+        self.state().get_field(-1, "path");
+        let mut search_path = self.state().to_str(-1).unwrap().to_string();
+        search_path.push(';');
+        search_path.push_str(&lua_path.to_string_lossy());
+
+        self.state().push_string(&search_path);
+        self.state().set_field(-4, "path");
+        self.state().pop(2);
+
+        // Set the native file path.
+        self.state().get_field(-1, "cpath");
+        let mut search_path = self.state().to_str(-1).unwrap().to_string();
+        search_path.push(';');
+        search_path.push_str(&native_path.to_string_lossy());
+
+        self.state().push_string(&search_path);
+        self.state().set_field(-4, "cpath");
+        self.state().pop(3);
+    }
+
     /// Gets a mutable instance of the Lua interpreter state.
     ///
     /// This function uses the direct lua_State pointer, so multiple owners can all mutate the same
@@ -346,37 +353,6 @@ impl Environment {
         } else {
             Ok(status)
         }
-    }
-
-    /// Adds a path to Lua's require path for modules.
-    pub fn add_path(&self, path: &str) {
-        self.state().get_global("package");
-        self.state().get_field(-1, "path");
-
-        let current_path = self.state().to_str(-1).unwrap().to_string();
-
-        let mut new_path = String::from(path);
-        new_path.push(';');
-        new_path.push_str(&current_path);
-
-        self.state().push_string(&new_path);
-        self.state().set_field(-4, "path");
-        self.state().pop(3);
-    }
-
-    /// Adds a path to Lua's require path for native modules.
-    pub fn add_cpath(&self, path: &str) {
-        self.state().get_global("package");
-        self.state().get_field(-1, "cpath");
-
-        let current_path = self.state().to_str(-1).unwrap().to_string();
-        let mut new_path = String::from(path);
-        new_path.push(';');
-        new_path.push_str(&current_path);
-
-        self.state().push_string(&new_path);
-        self.state().set_field(-4, "cpath");
-        self.state().pop(3);
     }
 
     /// Pushes the value of a registry key onto the stack.
