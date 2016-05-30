@@ -12,3 +12,6 @@ target/
 
 # Test output
 tests/fixtures/*.out
+
+# Mkdocs output
+site/
