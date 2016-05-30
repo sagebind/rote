@@ -20,7 +20,7 @@ static KEY: f64 = 264299.0;
 
 /// A function that can be bound to be callable inside the Lua runtime.
 pub type Function = fn(Environment) -> ScriptResult;
-pub type Closure = Box<FnMut(Environment) -> ScriptResult>;
+pub type Closure = FnMut(Environment) -> ScriptResult;
 
 
 /// Stores the state of an entire task execution environment.
@@ -285,8 +285,8 @@ impl Environment {
             let environment = Environment::from_ptr(ptr);
 
             // Get the raw pointer and turn it back into a Rust function pointer.
-            let raw_ptr = environment.state().to_userdata(ffi::lua_upvalueindex(1));
-            let function: Function = mem::transmute(raw_ptr);
+            let fn_ptr = environment.state().to_userdata(ffi::lua_upvalueindex(1));
+            let function: Function = mem::transmute(fn_ptr);
 
             // Invoke the function.
             function(environment).unwrap_or_else(|err: Box<Error>| {
@@ -301,30 +301,34 @@ impl Environment {
     }
 
     /// Pushes a safe Rust closure onto the stack.
-    ///
-    /// Note that this currently leaks memory as there is no way to cleanup resources, so it should be used sparingly.
-    pub fn push_closure(&self, closure: Closure) {
-        let cb = Box::new(closure);
-
+    pub fn push_closure(&self, closure: Box<Closure>) {
         unsafe {
             // Push a pointer to the closure so that we know what to delegate to.
-            self.state().push_light_userdata(Box::into_raw(cb) as *mut c_void);
+            let closure_ptr = self.state().new_userdata_typed();
+            ptr::write(closure_ptr, Box::into_raw(closure));
+
+            // Tell Lua how to clean up the closure.
+            if self.state().get_metatable(-1) {
+                self.state().push_fn(Some(drop_closure));
+                self.state().set_field(-2, "__gc");
+                self.state().pop(1);
+            }
         }
 
         // Push a wrapper function onto the stack, which delegates to the given function.
-        self.state().push_closure(Some(fn_wrapper), 1);
+        self.state().push_closure(Some(closure_wrapper), 1);
 
         // Wrapper function for invoking Rust functions from inside Lua.
-        unsafe extern fn fn_wrapper(ptr: *mut ffi::lua_State) -> c_int {
+        unsafe extern fn closure_wrapper(ptr: *mut ffi::lua_State) -> c_int {
             // Get the environment from the raw pointer.
             let environment = Environment::from_ptr(ptr);
 
-            // Get the raw pointer and turn it back into a Rust closure pointer.
-            let raw_ptr = environment.state().to_userdata(ffi::lua_upvalueindex(1));
-            let closure: &mut Closure = mem::transmute(raw_ptr);
+            // Get the upvalue and turn it back into a Rust closure pointer.
+            let closure_ptr = environment.state().to_userdata(ffi::lua_upvalueindex(1));
+            let closure: *mut *mut Closure = mem::transmute(closure_ptr);
 
             // Invoke the closure.
-            closure(environment).unwrap_or_else(|err: Box<Error>| {
+            (**closure)(environment).unwrap_or_else(|err: Box<Error>| {
                 let mut state = lua::State::from_ptr(ptr);
 
                 state.location(1);
@@ -332,6 +336,21 @@ impl Environment {
                 state.concat(2);
                 state.error();
             }) as c_int
+        }
+
+        // Cleans up the memory of a closure.
+        unsafe extern fn drop_closure(ptr: *mut ffi::lua_State) -> c_int {
+            let mut state = lua::State::from_ptr(ptr);
+
+            // Get the closure to free.
+            let closure_ptr = state.to_userdata(1);
+            let closure: *mut *mut Closure = mem::transmute(closure_ptr);
+            let closure_box = Box::from_raw(*closure);
+
+            // Free the closure.
+            drop(closure_box);
+
+            0
         }
     }
 
