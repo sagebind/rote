@@ -13,7 +13,6 @@ mod stdlib;
 
 use getopts::Options;
 use runner::Runner;
-use script::task::Task;
 use std::env;
 use std::path;
 use std::process;

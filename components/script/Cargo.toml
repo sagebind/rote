@@ -8,6 +8,5 @@ path = "lib.rs"
 
 [dependencies]
 filetime = "0.1"
-libc = "0.1"
 log = "0.3"
 lua = { git = "https://github.com/jcmoyer/rust-lua53" }

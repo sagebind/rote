@@ -1,7 +1,7 @@
 use ::ScriptResult;
 use iter::TableIterator;
-use libc::{c_int, c_void};
 use lua::{self, ffi};
+use lua::libc::{c_int, c_void};
 use rule::Rule;
 use std::cell::RefCell;
 use std::clone::Clone;

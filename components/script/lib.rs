@@ -1,5 +1,4 @@
 extern crate filetime;
-extern crate libc;
 #[macro_use] extern crate log;
 pub extern crate lua;
 
