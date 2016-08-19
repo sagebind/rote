@@ -1,7 +1,7 @@
-use script::task::Task;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::error::Error;
 use std::rc::Rc;
+use task::Task;
 
 
 /// Stores a directional, sparse graph of tasks and their dependencies.

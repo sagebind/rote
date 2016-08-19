@@ -1,7 +1,7 @@
 use graph::Graph;
+use modules;
 use num_cpus;
-use script::Environment;
-use script::task::Task;
+use runtime::{Environment, Runtime};
 use std::cmp;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::mpsc;
 use std::thread;
-use stdlib;
+use task::Task;
 use term;
 
 
@@ -39,36 +39,38 @@ pub struct EnvironmentSpec {
 
 impl EnvironmentSpec {
     /// Creates an environment from the environment specification.
-    pub fn create(&self) -> Result<Environment, Box<Error>> {
+    pub fn create(&self) -> Result<Runtime, Box<Error>> {
         // Prepare a new environment.
         let environment = try!(Environment::new(self.path.clone()));
+        let runtime = Runtime::new(environment);
 
         // Open standard library functions.
-        environment.state().open_libs();
-        stdlib::open_lib(environment.clone());
+        runtime.state().open_libs();
+        modules::stdlib::load(runtime.clone());
+        runtime.register_lib("fs", modules::fs::load);
 
         // Set include paths.
         for path in &self.include_paths {
-            environment.include_path(&path);
+            runtime.include_path(&path);
         }
 
         // Set the OS
-        environment.state().push_string(if cfg!(windows) {
+        runtime.state().push_string(if cfg!(windows) {
             "windows"
         } else {
             "unix"
         });
-        environment.state().set_global("OS");
+        runtime.state().set_global("OS");
 
         // Set configured variables.
         for &(ref name, ref value) in &self.variables {
-            environment.set_var(&name, value.clone());
+            runtime.set_var(&name, value.clone());
         }
 
         // Load the script.
-        try!(environment.load());
+        try!(runtime.load());
 
-        Ok(environment)
+        Ok(runtime)
     }
 }
 
@@ -84,8 +86,8 @@ pub struct Runner {
     /// Environment specification.
     spec: EnvironmentSpec,
 
-    /// Environment local owned by the master thread.
-    environment: Option<Environment>,
+    /// Runtime local owned by the master thread.
+    runtime: Option<Runtime>,
 }
 
 impl Runner {
@@ -114,7 +116,7 @@ impl Runner {
                 always_run: false,
                 keep_going: false,
             },
-            environment: None,
+            runtime: None,
         })
     }
 
@@ -161,8 +163,8 @@ impl Runner {
 
     /// Load the script.
     pub fn load(&mut self) -> Result<(), Box<Error>> {
-        if self.environment.is_none() {
-            self.environment = Some(try!(self.spec.create()));
+        if self.runtime.is_none() {
+            self.runtime = Some(try!(self.spec.create()));
         }
 
         Ok(())
@@ -170,7 +172,7 @@ impl Runner {
 
     /// Prints the list of named tasks for a script.
     pub fn print_task_list(&mut self) {
-        let mut tasks = self.environment().tasks();
+        let mut tasks = self.runtime().environment().tasks();
         tasks.sort_by(|a, b| a.name().cmp(b.name()));
 
         let mut out = term::stdout().unwrap();
@@ -188,7 +190,7 @@ impl Runner {
             writeln!(out, "").unwrap();
         }
 
-        if let Some(ref default) = self.environment().default_task() {
+        if let Some(ref default) = self.runtime().environment().default_task() {
             println!("");
             println!("Default task: {}", default);
         }
@@ -196,7 +198,7 @@ impl Runner {
 
     /// Run the default task.
     pub fn run_default(&mut self) -> Result<(), Box<Error>> {
-        if let Some(ref name) = self.environment().default_task() {
+        if let Some(ref name) = self.runtime().environment().default_task() {
             let tasks = vec![name];
             self.run(&tasks)
         } else {
@@ -237,8 +239,8 @@ impl Runner {
 
             free_threads.insert(thread_id);
             threads.push(thread::spawn(move || {
-                // Prepare a new environment.
-                let environment = spec.create().unwrap_or_else(|e| {
+                // Prepare a new runtime.
+                let runtime = spec.create().unwrap_or_else(|e| {
                     error!("{}", e);
                     panic!();
                 });
@@ -254,12 +256,12 @@ impl Runner {
                     // Lookup the task to run.
                     let task = {
                         // Lookup the task to run.
-                        if let Some(task) = environment.get_task(&name) {
+                        if let Some(task) = runtime.environment().get_task(&name) {
                             task as Rc<Task>
                         }
 
                         // Find a rule that matches the task name.
-                        else if let Some(rule) = environment.rules().iter().find(|rule| rule.matches(&name)) {
+                        else if let Some(rule) = runtime.environment().rules().iter().find(|rule| rule.matches(&name)) {
                             Rc::new(rule.create_task(name).unwrap()) as Rc<Task>
                         }
 
@@ -374,19 +376,20 @@ impl Runner {
             }
         }
 
+        info!("all tasks up to date");
         Ok(())
     }
 
     fn resolve_task<S: AsRef<str>>(&mut self, name: S) -> Result<(), Box<Error>> {
         if !self.graph.contains(&name) {
             // Lookup the task to run.
-            if let Some(task) = self.environment().get_task(&name) {
+            if let Some(task) = self.runtime().environment().get_task(&name) {
                 debug!("task '{}' matches named task", name.as_ref());
                 self.graph.insert(task.clone());
             }
 
             // Find a rule that matches the task name.
-            else if let Some(rule) = self.environment().rules().iter().find(|rule| rule.matches(&name)) {
+            else if let Some(rule) = self.runtime().environment().rules().iter().find(|rule| rule.matches(&name)) {
                 debug!("task '{}' matches rule '{}'", name.as_ref(), rule.pattern);
                 // Create a task for the rule and insert it in the graph.
                 self.graph.insert(Rc::new(rule.create_task(name.as_ref()).unwrap()));
@@ -407,7 +410,7 @@ impl Runner {
         Ok(())
     }
 
-    fn environment(&self) -> Environment {
-        self.environment.as_ref().unwrap().clone()
+    fn runtime(&self) -> Runtime {
+        self.runtime.as_ref().unwrap().clone()
     }
 }

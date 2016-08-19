@@ -1,6 +1,4 @@
-extern crate script;
-
-use script::{Environment, ScriptResult, StatePtr};
+use runtime::{Runtime, ScriptResult, StatePtr};
 use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io::prelude::*;
@@ -10,10 +8,10 @@ use std::io::prelude::*;
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to the file to check.
-fn exists(environment: Environment) -> ScriptResult {
-    let path = environment.state().check_string(1).to_string();
+fn exists(runtime: Runtime) -> ScriptResult {
+    let path = runtime.state().check_string(1).to_string();
 
-    environment.state().push_bool(fs::metadata(path).is_ok());
+    runtime.state().push_bool(fs::metadata(path).is_ok());
 
     Ok(1)
 }
@@ -22,11 +20,11 @@ fn exists(environment: Environment) -> ScriptResult {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to check.
-fn is_dir(environment: Environment) -> ScriptResult {
-    let path = environment.state().check_string(1).to_string();
+fn is_dir(runtime: Runtime) -> ScriptResult {
+    let path = runtime.state().check_string(1).to_string();
 
     let metadata = fs::metadata(path);
-    environment.state().push_bool(metadata.is_ok() && metadata.unwrap().file_type().is_dir());
+    runtime.state().push_bool(metadata.is_ok() && metadata.unwrap().file_type().is_dir());
 
     Ok(1)
 }
@@ -35,11 +33,11 @@ fn is_dir(environment: Environment) -> ScriptResult {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to check.
-fn is_file(environment: Environment) -> ScriptResult {
-    let path = environment.state().check_string(1).to_string();
+fn is_file(runtime: Runtime) -> ScriptResult {
+    let path = runtime.state().check_string(1).to_string();
 
     let metadata = fs::metadata(path);
-    environment.state().push_bool(metadata.is_ok() && metadata.unwrap().file_type().is_file());
+    runtime.state().push_bool(metadata.is_ok() && metadata.unwrap().file_type().is_file());
 
     Ok(1)
 }
@@ -48,11 +46,11 @@ fn is_file(environment: Environment) -> ScriptResult {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to check.
-fn is_symlink(environment: Environment) -> ScriptResult {
-    let path = environment.state().check_string(1).to_string();
+fn is_symlink(runtime: Runtime) -> ScriptResult {
+    let path = runtime.state().check_string(1).to_string();
 
     let metadata = fs::metadata(path);
-    environment.state().push_bool(metadata.is_ok() && metadata.unwrap().file_type().is_symlink());
+    runtime.state().push_bool(metadata.is_ok() && metadata.unwrap().file_type().is_symlink());
 
     Ok(1)
 }
@@ -61,9 +59,9 @@ fn is_symlink(environment: Environment) -> ScriptResult {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path to create the directory.
-fn mkdir(environment: Environment) -> ScriptResult {
+fn mkdir(runtime: Runtime) -> ScriptResult {
     // Get the path as the first argument.
-    let path = environment.state().check_string(1).to_string();
+    let path = runtime.state().check_string(1).to_string();
 
     if fs::create_dir(&path).is_err() {
         return Err(format!("failed to create directory \"{}\"", path).into());
@@ -77,9 +75,9 @@ fn mkdir(environment: Environment) -> ScriptResult {
 /// # Lua arguments
 /// * `source: string`          - Path of the file to copy.
 /// * `dest: string`            - Path to copy the file to.
-fn copy(environment: Environment) -> ScriptResult {
-    let source = environment.state().check_string(1).to_string();
-    let dest = environment.state().check_string(2).to_string();
+fn copy(runtime: Runtime) -> ScriptResult {
+    let source = runtime.state().check_string(1).to_string();
+    let dest = runtime.state().check_string(2).to_string();
 
     if fs::copy(&source, dest).is_err() {
         return Err(format!("failed to copy \"{}\"", source).into());
@@ -93,9 +91,9 @@ fn copy(environment: Environment) -> ScriptResult {
 /// # Lua arguments
 /// * `source: string`          - Path of the file to move.
 /// * `dest: string`            - Path to move the file to.
-fn rename(environment: Environment) -> ScriptResult {
-    let source = environment.state().check_string(1).to_string();
-    let destination = environment.state().check_string(2).to_string();
+fn rename(runtime: Runtime) -> ScriptResult {
+    let source = runtime.state().check_string(1).to_string();
+    let destination = runtime.state().check_string(2).to_string();
 
     if fs::rename(source, destination).is_err() {
         return Err("no such file or directory".into());
@@ -108,8 +106,8 @@ fn rename(environment: Environment) -> ScriptResult {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path of the file or directory to remove.
-fn remove(environment: Environment) -> ScriptResult {
-    let path = environment.state().check_string(1).to_string();
+fn remove(runtime: Runtime) -> ScriptResult {
+    let path = runtime.state().check_string(1).to_string();
 
     if let Ok(metadata) = fs::metadata(&path) {
         if metadata.file_type().is_dir() {
@@ -130,8 +128,8 @@ fn remove(environment: Environment) -> ScriptResult {
 ///
 /// # Lua arguments
 /// * `path: string`            - Path of the file to read from.
-fn get(environment: Environment) -> ScriptResult {
-    let path = environment.state().check_string(1).to_string();
+fn get(runtime: Runtime) -> ScriptResult {
+    let path = runtime.state().check_string(1).to_string();
 
     let file = File::open(path);
 
@@ -146,7 +144,7 @@ fn get(environment: Environment) -> ScriptResult {
         return Err("failed to read file".into());
     }
 
-    environment.state().push_string(&buffer);
+    runtime.state().push_string(&buffer);
 
     Ok(1)
 }
@@ -156,9 +154,9 @@ fn get(environment: Environment) -> ScriptResult {
 /// # Lua arguments
 /// * `path: string`            - Path to the file to write to.
 /// * `contents: string`        - The contents to write.
-fn put(environment: Environment) -> ScriptResult {
-    let path = environment.state().check_string(1).to_string();
-    let contents = String::from(environment.state().check_string(2));
+fn put(runtime: Runtime) -> ScriptResult {
+    let path = runtime.state().check_string(1).to_string();
+    let contents = String::from(runtime.state().check_string(2));
 
     let file = OpenOptions::new()
                    .write(true)
@@ -183,9 +181,9 @@ fn put(environment: Environment) -> ScriptResult {
 /// # Lua arguments
 /// * `path: string`            - Path to the file to append to.
 /// * `contents: string`        - The contents to append.
-fn append(environment: Environment) -> ScriptResult {
-    let path = environment.state().check_string(1).to_string();
-    let contents = String::from(environment.state().check_string(2));
+fn append(runtime: Runtime) -> ScriptResult {
+    let path = runtime.state().check_string(1).to_string();
+    let contents = String::from(runtime.state().check_string(2));
 
     let file = OpenOptions::new()
                    .write(true)
@@ -209,13 +207,13 @@ fn append(environment: Environment) -> ScriptResult {
 /// # Lua arguments
 /// * `sources: table`          - A list of source files to combine.
 /// * `dest: string`            - The path to the output file.
-fn combine(environment: Environment) -> ScriptResult {
-    if !environment.state().is_table(1) {
+fn combine(runtime: Runtime) -> ScriptResult {
+    if !runtime.state().is_table(1) {
         return Err("first argument must be a table".into());
     }
 
     // Open the output file for writing.
-    let dest = environment.state().check_string(2).to_string();
+    let dest = runtime.state().check_string(2).to_string();
     let out_file = OpenOptions::new()
                        .write(true)
                        .truncate(true)
@@ -229,7 +227,7 @@ fn combine(environment: Environment) -> ScriptResult {
     let mut out_file = out_file.unwrap();
 
     // Walk through each path in the sources table and write their contents.
-    for mut item in environment.iter(1) {
+    for mut item in runtime.iter(1) {
         let source: String = item.value().unwrap();
 
         let in_file = File::open(&source);
@@ -254,12 +252,9 @@ fn combine(environment: Environment) -> ScriptResult {
     Ok(0)
 }
 
-
-#[no_mangle]
-pub unsafe extern fn luaopen_fs(ptr: StatePtr) -> i32 {
-    let environment = Environment::from_ptr(ptr);
-
-    environment.register_lib(&[
+/// Module loader.
+pub fn load(runtime: Runtime) -> ScriptResult {
+    runtime.load_lib(&[
         ("exists", exists),
         ("is_dir", is_dir),
         ("is_file", is_file),
@@ -273,5 +268,6 @@ pub unsafe extern fn luaopen_fs(ptr: StatePtr) -> i32 {
         ("append", append),
         ("combine", combine)
     ]);
-    1
+
+    Ok(1)
 }

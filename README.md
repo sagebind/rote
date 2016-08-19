@@ -16,9 +16,8 @@ Rote is a multi-threaded task runner and build tool designed to be easy to use, 
 
 
 ## Compiling
-Rote comes with some shell scripts to orchestrate building. If only there was a good build tool we could use instead...
 
-    ./scripts/build.sh
+    cargo build
 
 This will compile Rote along with a downloaded Lua 5.3 interpreter.
 

@@ -1,15 +1,23 @@
+extern crate filetime;
+extern crate flate2;
 extern crate getopts;
 extern crate glob;
-#[macro_use] extern crate log;
+#[macro_use]
+extern crate log;
+extern crate lua;
 extern crate num_cpus;
 extern crate regex;
-extern crate script;
+extern crate tar;
 extern crate term;
+extern crate time;
 
 mod graph;
 mod logger;
+mod modules;
+mod rule;
 mod runner;
-mod stdlib;
+mod runtime;
+mod task;
 
 use getopts::Options;
 use runner::Runner;
