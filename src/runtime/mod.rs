@@ -3,6 +3,7 @@ use lua::libc::{c_int, c_void};
 use std::clone::Clone;
 use std::env;
 use std::error::Error;
+use std::intrinsics;
 use std::mem;
 use std::path::PathBuf;
 use std::ptr;
@@ -16,16 +17,9 @@ pub use self::environment::Environment;
 /// Results that are returned by functions callable from Lua.
 pub type ScriptResult = Result<i32, Box<Error>>;
 
-// Convenience alias for Lua state pointers.
-pub type StatePtr = *mut ffi::lua_State;
-
-// Just a tiny key used to obtain a unique registry location to store the environment pointer.
-static KEY: f64 = 264299.0;
-
 /// A function that can be bound to be callable inside the Lua runtime.
 pub type Function = fn(Runtime) -> ScriptResult;
 pub type Closure = FnMut(Runtime) -> ScriptResult;
-pub type ModuleEntrypoint = unsafe extern fn(StatePtr) -> i32;
 
 
 /// Manages the Lua interpreter runtime for a Lua script.
@@ -50,7 +44,9 @@ impl Runtime {
 
         // Create a weak pointer to the environment and push it into the registry so that you can
         // access the environment object by its Lua state.
-        runtime.state().push(KEY);
+        runtime.state().push(unsafe {
+            intrinsics::type_id::<Environment>() as f64
+        });
         let ptr = runtime.state().new_userdata_typed();
         let weak = Rc::downgrade(&runtime.environment);
         unsafe {
@@ -64,13 +60,13 @@ impl Runtime {
     /// Fetches the environment by its Lua pointer.
     ///
     /// This function is far from safe, and should be used with care.
-    pub unsafe fn from_ptr(ptr: StatePtr) -> Runtime {
+    pub unsafe fn from_ptr(ptr: *mut ffi::lua_State) -> Runtime {
         // First, get a State object from the raw pointer.
         let mut state = lua::State::from_ptr(ptr);
 
         // Fetch the environment pointer from the registry.
         let environment = {
-            state.push(KEY);
+            state.push(intrinsics::type_id::<Environment>() as f64);
             state.get_table(lua::REGISTRYINDEX);
 
             // Read the weak pointer.

@@ -1,4 +1,4 @@
-use runtime::{Runtime, ScriptResult, StatePtr};
+use runtime::{Runtime, ScriptResult};
 use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io::prelude::*;

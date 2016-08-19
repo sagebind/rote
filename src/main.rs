@@ -1,3 +1,4 @@
+#![feature(core_intrinsics)]
 extern crate filetime;
 extern crate flate2;
 extern crate getopts;
