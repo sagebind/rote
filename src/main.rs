@@ -1,16 +1,14 @@
 #![feature(core_intrinsics)]
 extern crate filetime;
-extern crate flate2;
 extern crate getopts;
 extern crate glob;
+extern crate json;
 #[macro_use]
 extern crate log;
 extern crate lua;
 extern crate num_cpus;
 extern crate regex;
-extern crate tar;
 extern crate term;
-extern crate time;
 
 mod graph;
 mod logger;

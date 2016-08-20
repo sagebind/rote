@@ -46,8 +46,9 @@ impl EnvironmentSpec {
 
         // Open standard library functions.
         runtime.state().open_libs();
-        modules::stdlib::load(runtime.clone());
-        runtime.register_lib("fs", modules::fs::load);
+
+        // Register modules.
+        modules::register_all(&runtime);
 
         // Set include paths.
         for path in &self.include_paths {
@@ -64,7 +65,8 @@ impl EnvironmentSpec {
 
         // Set configured variables.
         for &(ref name, ref value) in &self.variables {
-            runtime.set_var(&name, value.clone());
+            runtime.state().push(value.clone());
+            runtime.state().set_global(&name);
         }
 
         // Load the script.

@@ -227,8 +227,8 @@ fn combine(runtime: Runtime) -> ScriptResult {
     let mut out_file = out_file.unwrap();
 
     // Walk through each path in the sources table and write their contents.
-    for mut item in runtime.iter(1) {
-        let source: String = item.value().unwrap();
+    for (_, value) in runtime.iter(1) {
+        let source = runtime.state().to_str_in_place(value).unwrap().to_string();
 
         let in_file = File::open(&source);
         if in_file.is_err() {

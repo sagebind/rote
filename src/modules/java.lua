@@ -3,7 +3,7 @@ local java = {}
 
 
 function java.binary(options)
-    options = core.options(options, {
+    options = rote.merge({
         dest = ".",
         paths = {"."},
         warnings = true,
@@ -11,7 +11,7 @@ function java.binary(options)
         compiler = "javac",
         encoding = "utf-8",
         mainClass = "Main"
-    })
+    }, options)
 
     local compiler_flags = {
         "-verbose",

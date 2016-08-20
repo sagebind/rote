@@ -1,7 +1,6 @@
 use lua::{self, ffi};
 use lua::libc::{c_int, c_void};
 use std::clone::Clone;
-use std::env;
 use std::error::Error;
 use std::intrinsics;
 use std::mem;
@@ -126,32 +125,6 @@ impl Runtime {
         };
 
         Ok(())
-    }
-
-    /// Gets a variable value.
-    pub fn var<S: AsRef<str>>(&self, name: S) -> Option<String> {
-        let name = name.as_ref();
-
-        // Attempt to match an environment variable, or fallback to a global variable.
-        env::var(name)
-            .ok()
-            .map(|value| value.to_string())
-            .or_else(|| {
-                let value = if self.state().get_global(name) != lua::Type::Nil {
-                    Some(self.state().check_string(-1).to_string())
-                } else {
-                    None
-                };
-
-                self.state().pop(1);
-                value
-            })
-    }
-
-    /// Sets a variable value.
-    pub fn set_var<S: AsRef<str>, V: lua::ToLua>(&self, name: S, value: V) {
-        self.state().push(value);
-        self.state().set_global(name.as_ref());
     }
 
     /// Adds a path to Lua's require path for modules.

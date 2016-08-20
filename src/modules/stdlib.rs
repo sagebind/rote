@@ -20,8 +20,12 @@ pub fn expand_string(input: &str, runtime: Runtime) -> String {
     pattern.replace_all(input, |caps: &Captures| {
         let name = caps.at(1).unwrap_or("");
 
-        // Attempt to match a variable definition, or fallback to the original string.
-        runtime.var(name).unwrap_or("".to_string())
+        // Attempt to match a variable definition, or fallback to an empty string.
+        runtime.state().get_global(name);
+        let value = runtime.state().to_str_in_place(-1).unwrap_or("").to_string();
+        runtime.state().pop(1);
+
+        value
     })
 }
 
@@ -179,8 +183,14 @@ fn execute(runtime: Runtime) -> ScriptResult {
     command.status().map_err(|e| {
         format!("failed to execute process: {}", e).into()
     }).and_then(|status| {
-        runtime.state().push_number(status.code().unwrap_or(1) as f64);
-        Ok(1)
+        let status = status.code().unwrap_or(1);
+
+        if status > 0 {
+            Err("command returned nonzero exit code".into())
+        } else {
+            runtime.state().push_number(status as f64);
+            Ok(1)
+        }
     })
 }
 
@@ -354,25 +364,22 @@ fn merge(runtime: Runtime) -> ScriptResult {
     }
 
     fn do_merge(runtime: Runtime, src_index: i32, dest_index: i32) {
-        runtime.state().push_nil();
-
         // Iterate over every key in the source table.
-        while runtime.state().next(src_index) {
-            if runtime.state().is_table(-1) {
+        for (key, value) in runtime.iter(src_index) {
+            runtime.state().push_value(key);
+
+            if runtime.state().is_table(value) {
                 runtime.state().new_table();
 
                 // Merge the inner table recursively.
-                do_merge(runtime.clone(), runtime.state().get_top() - 1, runtime.state().get_top());
-
-                // Remove the original table from the stack.
-                runtime.state().remove(-2);
+                do_merge(runtime.clone(), value, runtime.state().get_top());
+            } else {
+                runtime.state().push_value(value);
             }
 
             // t[k] = v
             runtime.state().set_table(dest_index);
         }
-
-        runtime.state().pop(1);
     }
 
     // If the input table is nil, just use the defaults table as the result.
