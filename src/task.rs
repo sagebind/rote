@@ -25,6 +25,8 @@ pub trait Task {
     fn run(&self) -> Result<(), Box<Error>>;
 }
 
+type ActionFn = Fn() -> Result<(), Box<Error>>;
+
 /// A single named build task.
 pub struct NamedTask {
     /// The name of the task.
@@ -37,16 +39,20 @@ pub struct NamedTask {
     pub dependencies: Vec<String>,
 
     /// Rule action.
-    action: Option<Box<Fn() -> Result<(), Box<Error>>>>,
+    action: Option<Box<ActionFn>>,
 }
 
 impl NamedTask {
-    pub fn new<S: Into<String>>(name: S, description: Option<S>, dependencies: Vec<String>, action: Option<Box<Fn() -> Result<(), Box<Error>>>>) -> NamedTask {
+    pub fn new<S, V, F>(name: S, description: Option<S>, dependencies: V, action: Option<F>) -> NamedTask
+        where S: Into<String>,
+              V: Into<Vec<String>>,
+              F: Fn() -> Result<(), Box<Error>> + 'static,
+    {
         NamedTask {
             name: name.into(),
             description: description.map(|s| s.into()),
-            dependencies: dependencies,
-            action: action,
+            dependencies: dependencies.into(),
+            action: action.map(|a| Box::new(a) as Box<ActionFn>),
         }
     }
 
