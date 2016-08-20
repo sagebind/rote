@@ -7,7 +7,6 @@ use std::env;
 use std::io::prelude::*;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::rc::Rc;
 use std::str;
 use task::NamedTask;
 use term;
@@ -68,7 +67,7 @@ fn create_rule(runtime: Runtime) -> ScriptResult {
     // Get the list of dependencies if given.
     let deps = if runtime.state().type_of(2) == Some(lua::Type::Table) {
         runtime.iter(2)
-            .map(|mut item| item.value().unwrap())
+            .map(|(_, value)| runtime.state().to_str_in_place(value).unwrap().to_string())
             .collect()
     } else {
         func_index -= 1;
@@ -86,8 +85,8 @@ fn create_rule(runtime: Runtime) -> ScriptResult {
     };
 
     let closure_env = runtime.clone();
-    let callback = Rc::new(move |name: &str| {
-        if let Some(func) = func {
+    let callback = func.map(|func| {
+        move |name: &str| {
             // Get the function reference onto the Lua stack.
             closure_env.state().raw_geti(lua::REGISTRYINDEX, func.value() as i64);
 
@@ -96,12 +95,10 @@ fn create_rule(runtime: Runtime) -> ScriptResult {
 
             // Invoke the task function.
             closure_env.call(1, 0, 0).map(|_| ()).map_err(|e| e.into())
-        } else {
-            Ok(())
         }
     });
 
-    runtime.environment().create_rule(Rc::new(Rule::new(pattern, deps, Some(callback))));
+    runtime.environment().create_rule(Rule::new(pattern, deps, callback));
     Ok(0)
 }
 
@@ -120,7 +117,7 @@ fn create_task(runtime: Runtime) -> ScriptResult {
     // Get the list of dependencies if given.
     let deps = if runtime.state().type_of(2) == Some(lua::Type::Table) {
         runtime.iter(2)
-            .map(|mut item| item.value().unwrap())
+            .map(|(_, value)| runtime.state().to_str_in_place(value).unwrap().to_string())
             .collect()
     } else {
         func_index -= 1;
@@ -138,19 +135,17 @@ fn create_task(runtime: Runtime) -> ScriptResult {
     };
 
     let closure_env = runtime.clone();
-    let callback = Box::new(move || {
-        if let Some(func) = func {
+    let callback = func.map(|func| {
+        move || {
             // Get the function reference onto the Lua stack.
             closure_env.state().raw_geti(lua::REGISTRYINDEX, func.value() as i64);
 
             // Invoke the task function.
             closure_env.call(0, 0, 0).map(|_| ()).map_err(|e| e.into())
-        } else {
-            Ok(())
         }
     });
 
-    runtime.environment().create_task(Rc::new(NamedTask::new(name, desc, deps, Some(callback))));
+    runtime.environment().create_task(NamedTask::new(name, desc, deps, callback));
     Ok(0)
 }
 
@@ -189,7 +184,7 @@ fn execute(runtime: Runtime) -> ScriptResult {
     })
 }
 
-/// Executes a shell command with a given list of arguments.
+/// Pipes a string into a shell command with a given list of arguments.
 fn pipe(runtime: Runtime) -> ScriptResult {
     // Create a command for the given program name.
     let mut command = Command::new(runtime.state().check_string(2));
@@ -254,6 +249,22 @@ fn expand(runtime: Runtime) -> ScriptResult {
 
     // Return the result.
     runtime.state().push_string(&result);
+    Ok(1)
+}
+
+/// Gets the value of an environment variable.
+///
+/// # Lua arguments
+/// * `key: string` - The variable name.
+fn env(runtime: Runtime) -> ScriptResult {
+    let key = runtime.state().check_string(1).to_string();
+
+    if let Ok(value) = env::var(key) {
+        runtime.state().push(value);
+    } else {
+        runtime.state().push_nil();
+    }
+
     Ok(1)
 }
 
@@ -326,8 +337,44 @@ fn glob(runtime: Runtime) -> ScriptResult {
     }
 }
 
-/// Parses an input table of options and merges it with a table of default values.
-fn options(runtime: Runtime) -> ScriptResult {
+/// Creates a new table produced by merging all tables given as arguments.
+///
+/// This makes a deep copy of all tables given into a new table. No tables are modified.
+fn merge(runtime: Runtime) -> ScriptResult {
+    let args_count = runtime.state().get_top();
+
+    // merged = {}
+    runtime.state().new_table();
+
+    // Walk through the arguments, merging as we go.
+    for i in 1..args_count {
+        if runtime.state().is_table(i) {
+            do_merge(runtime.clone(), i, args_count + 1);
+        }
+    }
+
+    fn do_merge(runtime: Runtime, src_index: i32, dest_index: i32) {
+        runtime.state().push_nil();
+
+        // Iterate over every key in the source table.
+        while runtime.state().next(src_index) {
+            if runtime.state().is_table(-1) {
+                runtime.state().new_table();
+
+                // Merge the inner table recursively.
+                do_merge(runtime.clone(), runtime.state().get_top() - 1, runtime.state().get_top());
+
+                // Remove the original table from the stack.
+                runtime.state().remove(-2);
+            }
+
+            // t[k] = v
+            runtime.state().set_table(dest_index);
+        }
+
+        runtime.state().pop(1);
+    }
+
     // If the input table is nil, just use the defaults table as the result.
     if runtime.state().is_nil(1) {
         runtime.state().push_value(2);
@@ -335,7 +382,6 @@ fn options(runtime: Runtime) -> ScriptResult {
         // Copy the input table
         runtime.state().push_value(1);
         // Create a table to be used as the input's metatable
-        runtime.state().new_table();
         // Set __index in the metatable to be the defaults table
         runtime.state().push("__index");
         runtime.state().push_value(2);
@@ -412,11 +458,12 @@ pub fn load(runtime: Runtime) {
         ("create_rule", create_rule),
         ("create_task", create_task),
         ("current_dir", current_dir),
+        ("env", env),
         ("execute", execute),
         ("expand", expand),
         ("export", export),
         ("glob", glob),
-        ("options", options),
+        ("merge", merge),
         ("pipe", pipe),
         ("print", print),
         ("set_default_task", set_default_task),
@@ -427,6 +474,7 @@ pub fn load(runtime: Runtime) {
     // Define some global aliases.
     runtime.register_fn("default", set_default_task);
     runtime.register_fn("desc", set_description);
+    runtime.register_fn("env", env);
     runtime.register_fn("exec", execute);
     runtime.register_fn("export", export);
     runtime.register_fn("glob", glob);
@@ -434,6 +482,18 @@ pub fn load(runtime: Runtime) {
     runtime.register_fn("print", print);
     runtime.register_fn("rule", create_rule);
     runtime.register_fn("task", create_task);
+
+    // Set up reading global values to fallback to environment variables.
+    runtime.state().push_global_table();
+    runtime.state().new_table();
+    runtime.state().push("__index");
+    runtime.push_closure(Box::new(|runtime| {
+        runtime.state().remove(1);
+        env(runtime)
+    }));
+    runtime.state().set_table(-3);
+    runtime.state().set_metatable(-2);
+    runtime.state().pop(1);
 
     // Set up pipe to be a string method.
     runtime.state().get_global("string");

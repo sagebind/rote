@@ -68,14 +68,14 @@ impl Environment {
     }
 
     /// Creates a new task.
-    pub fn create_task(&self, task: Rc<NamedTask>) {
+    pub fn create_task(&self, task: NamedTask) {
         // Add it to the master list of tasks.
-        self.tasks.borrow_mut().insert(task.name().into(), task.clone());
+        self.tasks.borrow_mut().insert(task.name().into(), Rc::new(task));
     }
 
     /// Creates a new rule.
-    pub fn create_rule(&self, rule: Rc<Rule>) {
-        self.rules.borrow_mut().push(rule);
+    pub fn create_rule(&self, rule: Rule) {
+        self.rules.borrow_mut().push(Rc::new(rule));
     }
 
     /// Gets a task by name.
