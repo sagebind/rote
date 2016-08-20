@@ -1,8 +1,9 @@
 use lua::{self, ffi};
 use lua::libc::{c_int, c_void};
+use std::any::{Any, TypeId};
 use std::clone::Clone;
 use std::error::Error;
-use std::intrinsics;
+use std::hash::{Hash, Hasher, SipHasher};
 use std::mem;
 use std::path::PathBuf;
 use std::ptr;
@@ -43,9 +44,7 @@ impl Runtime {
 
         // Create a weak pointer to the environment and push it into the registry so that you can
         // access the environment object by its Lua state.
-        runtime.state().push(unsafe {
-            intrinsics::type_id::<Environment>() as f64
-        });
+        runtime.state().push(type_id_of::<Environment>() as f64);
         let ptr = runtime.state().new_userdata_typed();
         let weak = Rc::downgrade(&runtime.environment);
         unsafe {
@@ -65,7 +64,7 @@ impl Runtime {
 
         // Fetch the environment pointer from the registry.
         let environment = {
-            state.push(intrinsics::type_id::<Environment>() as f64);
+            state.push(type_id_of::<Environment>() as f64);
             state.get_table(lua::REGISTRYINDEX);
 
             // Read the weak pointer.
@@ -115,7 +114,7 @@ impl Runtime {
 
         // Load the given file.
         match self.state().do_file(path_str) {
-            lua::ThreadStatus::Ok => { }
+            lua::ThreadStatus::Ok => {}
             lua::ThreadStatus::FileError => {
                 return Err(format!("the file \"{}\" could not be read", path_str).into());
             }
@@ -321,4 +320,12 @@ impl Clone for Runtime {
             state: self.state(),
         }
     }
+}
+
+/// Safe type ID numeric function.
+fn type_id_of<T: Any>() -> u64 {
+    let type_id = TypeId::of::<T>();
+    let mut hasher = SipHasher::new();
+    type_id.hash(&mut hasher);
+    hasher.finish()
 }

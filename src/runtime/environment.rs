@@ -19,8 +19,13 @@ pub struct Environment {
     /// The default task to run.
     default_task: RefCell<Option<String>>,
 
+    /// The name of the task currently running.
+    current_task: RefCell<Option<String>>,
+
+    /// Full path to the current script.
     path: PathBuf,
 
+    /// Directory of the current script.
     directory: PathBuf,
 }
 
@@ -42,6 +47,7 @@ impl Environment {
             tasks: RefCell::new(HashMap::new()),
             rules: RefCell::new(Vec::new()),
             default_task: RefCell::new(None),
+            current_task: RefCell::new(None),
             path: script,
             directory: directory,
         })
@@ -94,5 +100,23 @@ impl Environment {
     /// Sets the default task.
     pub fn set_default_task<S: Into<String>>(&self, name: S) {
         *self.default_task.borrow_mut() = Some(name.into());
+    }
+
+    /// Gets the name of the currently running task.
+    pub fn current_task<'a>(&'a self) -> Option<String> {
+        match *self.current_task.borrow() {
+            Some(ref task) => Some(task.clone()),
+            None => None,
+        }
+    }
+
+    /// Sets the currently running task.
+    pub fn set_current_task<S: Into<String>>(&self, name: S) {
+        *self.current_task.borrow_mut() = Some(name.into());
+    }
+
+    /// Clears the currently running task.
+    pub fn clear_current_task(&self) {
+        *self.current_task.borrow_mut() = None;
     }
 }

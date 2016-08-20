@@ -223,7 +223,9 @@ impl Runner {
         let task_count = queue.len();
         let thread_count = cmp::min(self.jobs, task_count);
 
-        debug!("running {} task(s) across {} thread(s)", task_count, thread_count);
+        debug!("running {} task(s) across {} thread(s)",
+               task_count,
+               thread_count);
 
         // Spawn one thread for each job.
         let mut threads = Vec::new();
@@ -261,12 +263,13 @@ impl Runner {
                         if let Some(task) = runtime.environment().get_task(&name) {
                             task as Rc<Task>
                         }
-
                         // Find a rule that matches the task name.
-                        else if let Some(rule) = runtime.environment().rules().iter().find(|rule| rule.matches(&name)) {
+                        else if let Some(rule) = runtime.environment()
+                            .rules()
+                            .iter()
+                            .find(|rule| rule.matches(&name)) {
                             Rc::new(rule.create_task(name).unwrap()) as Rc<Task>
                         }
-
                         // No matching task.
                         else {
                             panic!("no matching task or rule for '{}'", name);
@@ -310,7 +313,8 @@ impl Runner {
 
             // If the thread sent an error, we should stop everything if keep_going isn't enabled.
             if let Err(thread_id) = result {
-                debug!("thread {} errored, waiting for remaining tasks...", thread_id);
+                debug!("thread {} errored, waiting for remaining tasks...",
+                       thread_id);
                 return Err("not all tasks completed successfully".into());
             }
 
@@ -389,14 +393,16 @@ impl Runner {
                 debug!("task '{}' matches named task", name.as_ref());
                 self.graph.insert(task.clone());
             }
-
             // Find a rule that matches the task name.
-            else if let Some(rule) = self.runtime().environment().rules().iter().find(|rule| rule.matches(&name)) {
+            else if let Some(rule) = self.runtime()
+                .environment()
+                .rules()
+                .iter()
+                .find(|rule| rule.matches(&name)) {
                 debug!("task '{}' matches rule '{}'", name.as_ref(), rule.pattern);
                 // Create a task for the rule and insert it in the graph.
                 self.graph.insert(Rc::new(rule.create_task(name.as_ref()).unwrap()));
             }
-
             // No matching task.
             else {
                 return Err(format!("no matching task or rule for '{}'", name.as_ref()).into());

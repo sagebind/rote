@@ -9,7 +9,6 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::str;
 use task::NamedTask;
-use term;
 
 
 /// Expands global and environment variables inside a given string.
@@ -98,7 +97,11 @@ fn create_rule(runtime: Runtime) -> ScriptResult {
             closure_env.state().push(name);
 
             // Invoke the task function.
-            closure_env.call(1, 0, 0).map(|_| ()).map_err(|e| e.into())
+            closure_env.environment().set_current_task(name);
+            let result = closure_env.call(1, 0, 0).map(|_| ()).map_err(|e| e.into());
+            closure_env.environment().clear_current_task();
+
+            result
         }
     });
 
@@ -139,17 +142,23 @@ fn create_task(runtime: Runtime) -> ScriptResult {
     };
 
     let closure_env = runtime.clone();
+    let later_name = name.clone();
     let callback = func.map(|func| {
         move || {
             // Get the function reference onto the Lua stack.
             closure_env.state().raw_geti(lua::REGISTRYINDEX, func.value() as i64);
 
             // Invoke the task function.
-            closure_env.call(0, 0, 0).map(|_| ()).map_err(|e| e.into())
+            let name = name.clone();
+            closure_env.environment().set_current_task(name);
+            let result = closure_env.call(0, 0, 0).map(|_| ()).map_err(|e| e.into());
+            closure_env.environment().clear_current_task();
+
+            result
         }
     });
 
-    runtime.environment().create_task(NamedTask::new(name, desc, deps, callback));
+    runtime.environment().create_task(NamedTask::new(later_name, desc, deps, callback));
     Ok(0)
 }
 
@@ -179,7 +188,7 @@ fn execute(runtime: Runtime) -> ScriptResult {
         command.arg(expand_string(runtime.state().check_string(i), runtime.clone()));
     }
 
-    // Execute the command and capture the exit status.
+    // Spawn the command, capturing its status.
     command.status().map_err(|e| {
         format!("failed to execute process: {}", e).into()
     }).and_then(|status| {
@@ -357,7 +366,7 @@ fn merge(runtime: Runtime) -> ScriptResult {
     runtime.state().new_table();
 
     // Walk through the arguments, merging as we go.
-    for i in 1..args_count {
+    for i in 1..args_count+1 {
         if runtime.state().is_table(i) {
             do_merge(runtime.clone(), i, args_count + 1);
         }
@@ -404,21 +413,12 @@ fn merge(runtime: Runtime) -> ScriptResult {
 /// # Lua arguments
 /// * `str: string` - The string to print.
 fn print(runtime: Runtime) -> ScriptResult {
-    let string = runtime.state().check_string(1).to_string();
-    let string = expand_string(&string, runtime);
-    let mut out = term::stdout().unwrap();
+    for i in 1..runtime.state().get_top()+1 {
+        let string = runtime.state().to_str(i).unwrap_or("").to_string();
+        runtime.state().pop(1);
 
-    if false {
-        /*for line in string.lines() {
-            let name = runtime.stack.front().unwrap();
-            out.fg(term::color::GREEN).unwrap();
-            write!(out, "{:9} ", format!("[{}]", name)).unwrap();
-            out.reset().unwrap();
-
-            writeln!(out, "{}", line).unwrap();
-        }*/
-    } else {
-        writeln!(out, "{}", string).unwrap();
+        let string = expand_string(&string, runtime.clone());
+        println!("{}", string);
     }
 
     Ok(0)

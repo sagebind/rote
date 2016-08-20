@@ -43,10 +43,14 @@ pub struct NamedTask {
 }
 
 impl NamedTask {
-    pub fn new<S, V, F>(name: S, description: Option<S>, dependencies: V, action: Option<F>) -> NamedTask
+    pub fn new<S, V, F>(name: S,
+                        description: Option<S>,
+                        dependencies: V,
+                        action: Option<F>)
+                        -> NamedTask
         where S: Into<String>,
               V: Into<Vec<String>>,
-              F: Fn() -> Result<(), Box<Error>> + 'static,
+              F: Fn() -> Result<(), Box<Error>> + 'static
     {
         NamedTask {
             name: name.into(),
@@ -109,7 +113,9 @@ impl PartialOrd for Task {
 }
 
 impl Hash for Task {
-    fn hash<H>(&self, state: &mut H) where H: Hasher {
+    fn hash<H>(&self, state: &mut H)
+        where H: Hasher
+    {
         self.name().hash(state)
     }
 }

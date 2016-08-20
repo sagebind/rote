@@ -1,7 +1,6 @@
-#![feature(core_intrinsics)]
-extern crate filetime;
 extern crate getopts;
 extern crate glob;
+extern crate hyper;
 extern crate json;
 #[macro_use]
 extern crate log;
@@ -10,6 +9,12 @@ extern crate num_cpus;
 extern crate regex;
 extern crate term;
 
+use getopts::Options;
+use runner::Runner;
+use std::env;
+use std::path;
+use std::process;
+
 mod graph;
 mod logger;
 mod modules;
@@ -17,12 +22,6 @@ mod rule;
 mod runner;
 mod runtime;
 mod task;
-
-use getopts::Options;
-use runner::Runner;
-use std::env;
-use std::path;
-use std::process;
 
 
 const ROTE_VERSION: &'static str = env!("CARGO_PKG_VERSION");

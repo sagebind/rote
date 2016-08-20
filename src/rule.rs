@@ -1,4 +1,3 @@
-use filetime::FileTime;
 use std::error::Error;
 use std::fs;
 use std::rc::Rc;
@@ -24,7 +23,7 @@ impl Rule {
     pub fn new<S, V, F>(pattern: S, dependencies: V, action: Option<F>) -> Rule
         where S: Into<String>,
               V: Into<Vec<String>>,
-              F: Fn(&str) -> Result<(), Box<Error>> + 'static,
+              F: Fn(&str) -> Result<(), Box<Error>> + 'static
     {
         Rule {
             pattern: pattern.into(),
@@ -63,9 +62,9 @@ impl Rule {
             let replacement = &name[index..end];
 
             // Expand the inputs with the corresponding names that match the output name.
-            inputs = inputs.into_iter().map(|input| {
-                input.replace("%", replacement)
-            }).collect();
+            inputs = inputs.into_iter()
+                .map(|input| input.replace("%", replacement))
+                .collect();
         }
 
         Some(FileTask {
@@ -90,11 +89,17 @@ impl task::Task for FileTask {
     /// Checks if the task is dirty by comparing the file modification time of the input and output
     /// files. If any of the input files are newer than the output file, then the task is dirty.
     fn satisfied(&self) -> bool {
-        get_file_time(&self.output)
+        fs::metadata(&self.output)
+            .and_then(|m| m.modified())
             .map(|time| {
                 self.inputs
                     .iter()
-                    .all(|input| get_file_time(input).map(|t| t <= time).unwrap_or(true))
+                    .all(|input| {
+                        fs::metadata(input)
+                            .and_then(|m| m.modified())
+                            .map(|t| t <= time)
+                            .unwrap_or(true)
+                    })
             })
             .unwrap_or(false)
     }
@@ -110,11 +115,4 @@ impl task::Task for FileTask {
             Ok(())
         }
     }
-}
-
-/// Gets the modified time of a file, if it exists.
-fn get_file_time(file_name: &str) -> Option<FileTime> {
-    fs::metadata(file_name)
-        .map(|metadata| FileTime::from_last_modification_time(&metadata))
-        .ok()
 }

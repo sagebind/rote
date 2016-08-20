@@ -7,15 +7,14 @@ repository = "http://github.com/coderstephen/rote"
 readme = "README.md"
 
 [dependencies]
-filetime = "0.1"
 getopts = "0.2"
 glob = "0.2"
+hyper = "0.9"
 json = "0.10"
 log = "0.3"
 lua = { git = "https://github.com/jcmoyer/rust-lua53" }
 num_cpus = "0.2"
 regex = "0.1"
-solicit = "0.4.4"
 term = "0.4"
 
 [[bin]]
