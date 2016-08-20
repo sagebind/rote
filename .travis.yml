@@ -7,8 +7,6 @@ rust:
   - beta
   - nightly
 
-script: ./scripts/build.sh
-
 matrix:
   allow_failures:
     - rust: nightly
