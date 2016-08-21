@@ -1,15 +1,15 @@
 WORLD = "Earth"
 assert(rote.expand("Hello $WORLD!") == "Hello Earth!")
 
-assert(rote.options(nil, {}) ~= nil)
-assert(rote.options({
+assert(rote.merge(nil, {}) ~= nil)
+assert(rote.merge({
     foo = "bar"
 }, {}).foo == "bar")
-assert(rote.options({}, {
+assert(rote.merge({}, {
     foo = "bar"
 }).foo == "bar")
-assert(rote.options({
+assert(rote.merge({
     foo = "bar"
 }, {
     foo = "baz"
-}).foo == "bar")
+}).foo == "baz")

@@ -5,10 +5,6 @@ use std::error::Error;
 
 
 fn parse(runtime: Runtime) -> ScriptResult {
-    let source = runtime.state().check_string(1).to_string();
-    let value = try!(json::parse(&source));
-    push_value(&runtime, &value);
-
     fn push_value(runtime: &Runtime, value: &JsonValue) {
         match value {
             &JsonValue::Null => {
@@ -47,16 +43,14 @@ fn parse(runtime: Runtime) -> ScriptResult {
         }
     }
 
+    let source = runtime.state().check_string(1).to_string();
+    let value = try!(json::parse(&source));
+    push_value(&runtime, &value);
+
     Ok(1)
 }
 
 fn stringify(runtime: Runtime) -> ScriptResult {
-    runtime.state().check_type(1, lua::Type::Table);
-
-    let value = try!(to_json(&runtime, 1));
-    let string = json::stringify(value);
-    runtime.state().push_string(&string);
-
     fn to_json(runtime: &Runtime, index: i32) -> Result<JsonValue, Box<Error>> {
         let lua_type = runtime.state().type_of(index);
 
@@ -105,6 +99,20 @@ fn stringify(runtime: Runtime) -> ScriptResult {
             },
         }
     }
+
+    let value = try!(to_json(&runtime, 1));
+    let string = if runtime.state().to_bool(2) {
+        let spaces = if runtime.state().get_top() >= 3 {
+            runtime.state().check_number(3) as u16
+        } else {
+            4
+        };
+
+        json::stringify_pretty(value, spaces)
+    } else {
+        json::stringify(value)
+    };
+    runtime.state().push_string(&string);
 
     Ok(1)
 }

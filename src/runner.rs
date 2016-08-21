@@ -241,7 +241,6 @@ impl Runner {
             let (parent_sender, thread_receiver) = mpsc::sync_channel::<(String, usize)>(0);
             channels.push(parent_sender);
 
-            free_threads.insert(thread_id);
             threads.push(thread::spawn(move || {
                 // Prepare a new runtime.
                 let runtime = spec.create().unwrap_or_else(|e| {
@@ -255,7 +254,7 @@ impl Runner {
 
                 // Begin executing tasks!
                 while let Ok((name, task_id)) = thread_receiver.recv() {
-                    println!("[{}/{}] {}", task_id, task_count, name);
+                    info!("running task '{}' ({} of {})", name, task_id, task_count);
 
                     // Lookup the task to run.
                     let task = {
@@ -307,7 +306,7 @@ impl Runner {
         let mut current_tasks: HashMap<usize, String> = HashMap::new();
         let all_tasks: HashSet<String> = queue.iter().map(|s| s.name().to_string()).collect();
 
-        while !queue.is_empty() {
+        while !queue.is_empty() || !current_tasks.is_empty() {
             // Wait for a thread to request a task.
             let result = receiver.recv().unwrap();
 
@@ -324,7 +323,7 @@ impl Runner {
 
             // If the thread was previously running a task, mark it as completed.
             if let Some(task) = current_tasks.remove(&thread_id) {
-                trace!("task {} completed", task);
+                trace!("task '{}' completed", task);
                 completed_tasks.insert(task);
             }
 

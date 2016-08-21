@@ -79,9 +79,8 @@ fn main() {
         logger::Filter::Error
     } else {
         match matches.opt_count("verbose") {
-            0 => logger::Filter::Warn,
-            1 => logger::Filter::Info,
-            2 => logger::Filter::Debug,
+            0 => logger::Filter::Info,
+            1 => logger::Filter::Debug,
             _ => logger::Filter::Trace,
         }
     }).unwrap();
@@ -133,14 +132,9 @@ fn main() {
         process::exit(1);
     }
 
-    // Set include path.
+    // Set project-local and global include path.
+    runner.include_path("./rote");
     runner.include_path("/usr/lib/rote/plugins");
-    if let Some(path) = env::current_exe().ok()
-        .and_then(|path| path.parent()
-            .map(|p| p.to_path_buf())
-        ) {
-        runner.include_path(path.to_str().unwrap());
-    }
 
     // User-specified paths.
     for value in matches.opt_strs("include-path") {

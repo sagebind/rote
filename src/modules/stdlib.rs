@@ -172,6 +172,16 @@ fn current_dir(runtime: Runtime) -> ScriptResult {
         .unwrap_or(0))
 }
 
+/// Gets the current Rote executable
+fn current_exe(runtime: Runtime) -> ScriptResult {
+    Ok(env::current_exe()
+        .map(|dir| {
+            runtime.state().push(dir.to_str());
+            1
+        })
+        .unwrap_or(0))
+}
+
 /// Executes a shell command with a given list of arguments.
 fn execute(runtime: Runtime) -> ScriptResult {
     // Create a command for the given program name.
@@ -342,7 +352,6 @@ fn glob(runtime: Runtime) -> ScriptResult {
                         // just continue the loop until we find a path we care about
                     }
                     None => {
-                        trace!("reached end of iterator");
                         runtime.state().push_nil();
                         return Ok(1);
                     }
@@ -465,6 +474,7 @@ pub fn load(runtime: Runtime) {
         ("create_rule", create_rule),
         ("create_task", create_task),
         ("current_dir", current_dir),
+        ("current_exe", current_exe),
         ("env", env),
         ("execute", execute),
         ("expand", expand),
