@@ -1,0 +1,22 @@
+site_name: Rote
+site_description: "The inspiringly simple taks runner and build tool."
+site_author: "Stephen Coakley"
+
+strict: true
+docs_dir: src
+site_dir: build
+theme_dir: theme
+markdown_extensions:
+    - admonition
+    - def_list
+extra:
+    logo: "logo.png"
+
+pages:
+    - Overview: index.md
+    - Getting started: getting-started.md
+    - Rotefiles: rotefiles.md
+    - Writing tasks: tasks.md
+    - File rules: rules.md
+    - Variables: variables.md
+    - Extending Rote: extending.md
