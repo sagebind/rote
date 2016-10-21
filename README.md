@@ -21,6 +21,10 @@ Rote is a multi-threaded task runner and build tool designed to be easy to use, 
 
 This will compile Rote along with a downloaded Lua 5.3 interpreter.
 
+### Ubuntu 16.04 Specific
+
+You may need to install `libreadline6-dev` before compiling.
+
 
 ## Usage
 To use Rote in your project, create a `Rotefile` in your project root. A `Rotefile` is a valid Lua script and should contain valid Lua code. Below is an example `Rotefile`:
