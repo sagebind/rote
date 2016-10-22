@@ -1,7 +1,7 @@
-# ![Rote](/docs/src/logo.png?raw=true)
+# ![Rote](docs/src/logo.png?raw=true)
 ##### Automate everything.
 
-[![Build Status](https://img.shields.io/travis/sagebind/rote.svg)](https://travis-ci.org/coderstephen/rote) [![Release](https://img.shields.io/github/release/sagebind/rote.svg)]() [![Downloads](https://img.shields.io/github/downloads/sagebind/rote/total.svg)]()
+[![Build Status](https://img.shields.io/travis/sagebind/rote.svg)](https://travis-ci.org/sagebind/rote) [![Release](https://img.shields.io/github/release/sagebind/rote.svg)]() [![Downloads](https://img.shields.io/github/downloads/sagebind/rote/total.svg)]()
 
 Rote is a multi-threaded task runner and build tool designed to be easy to use, portable, and fast. Automate your entire development workflow using Rote's scriptable task system to implement builds, deployment, and maintenance using a unified script syntax.
 

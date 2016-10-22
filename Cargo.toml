@@ -1,9 +1,9 @@
 [package]
 name = "rote"
 version = "0.2.0"
-authors = ["coderstephen <me@stephencoakley.com>"]
+authors = ["Stephen Coakley <me@stephencoakley.com>"]
 license = "Apache-2.0"
-repository = "http://github.com/coderstephen/rote"
+repository = "http://github.com/sagebind/rote"
 readme = "README.md"
 
 [dependencies]

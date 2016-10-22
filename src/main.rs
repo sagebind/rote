@@ -43,8 +43,8 @@ fn print_usage(options: Options) {
   ███    ███
 
 {}
-Report issues at <https://github.com/coderstephen/rote/issues>.
-Rote home page: <https://github.com/coderstephen/rote>"
+Report issues at <https://github.com/sagebind/rote/issues>.
+Rote home page: <https://github.com/sagebind/rote>"
     , options.usage(&short_usage));
 }
 

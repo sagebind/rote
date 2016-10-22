@@ -1,24 +1,16 @@
-cargo = require "cargo"
 fs = require "fs"
-pkg = require "pkg"
-busted = require "busted"
 default "debug"
 
 
 desc("Build a debug binary")
-task("debug", {"target/debug/rote"}, function()
-end)
-
-rule("target/debug/rote", function()
-    exec("./scripts/build.sh")
+task("debug", function()
+    exec("cargo", "build")
 end)
 
 desc("Build a release binary for all supported platforms")
-task("release", {"target/release/rote"}, function()
-end)
-
-rule("target/release/rote", function()
-    exec("./scripts/build.sh", "--release")
+task("release", function()
+    -- Build a static binary usin musl libc.
+    exec("cargo", "build", "--release", "--target=x86_64-unknown-linux-musl")
 end)
 
 desc("Clean the project directory")
@@ -26,46 +18,21 @@ task("clean", function()
     fs.remove("./target")
 end)
 
-desc("Update locked dependencies")
-task("update", function()
-    for path in glob("components/*") do
-        if fs.is_dir(path) and fs.is_file(path .. "/Cargo.toml") then
-            rote.change_dir(path)
-            cargo.update()
-        end
-    end
-end)
-
-desc("Build a Debian binary package")
-task("deb", {"target/release/rote"}, function()
-    local files = {
-        ["usr/bin/rote"] = "target/release/rote",
-    }
-
-    for path in glob("target/release/lib*.so") do
-        local file = path:match(".*/(.*)")
-        files["usr/lib/rote/" .. file] = path
-    end
-
-    pkg.deb {
-        output = "target/release/rote.deb",
-        name = "rote",
-        version = cargo.info("components/rote/Cargo.toml").version,
-        arch = "amd64",
-        maintainer = "Stephen Coakley <me@stephencoakley.com>",
-        description = "Plain and simple task and build tool",
-        long_description = "blah\n\nblah.",
-        depends = {
-            lib32gcc1 = ">= 5.0",
-            libc6 = ">= 2.21",
-            libgcc1 = ">= 5.0",
-        },
-        files = files,
-    }
+desc("Installs Rote into system path")
+task("install", {"release"}, function()
+    exec("install", "-s", "-T", "target/release/rote", "/usr/local/bin/rote")
 end)
 
 desc("Runs tests")
-task("test", function()
+task("test", {"debug"}, function()
+    local path = rote.current_dir() .. "/target/debug/rote"
+
+    if rote.current_exe() ~= path then
+        exec(path, "test")
+        return
+    end
+
+    local ok = true
     for file in glob("tests/*.lua") do
         print("[" .. file .. "]")
         local success, err = pcall(function()
@@ -73,15 +40,14 @@ task("test", function()
         end)
 
         if not success then
-            error("FAIL! Reason: " .. err)
+            print("FAIL! Reason: " .. err)
+            ok = false
         else
-            print "PASS"
+            print("PASS")
         end
     end
-end)
 
-rule("target/release/rote", function()
-    cargo.build {
-        release = true
-    }
+    if not ok then
+        error("some tests failed")
+    end
 end)

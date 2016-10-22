@@ -24,7 +24,7 @@ cpp.binary "foo" {
 
 task "release" {
     depends = {"build"},
-    function()
+    impl = function()
         exec("tar", "-czvf", "build/")
     end
 }
@@ -33,6 +33,9 @@ task "release" {
 The `task()` function takes up to three arguments. The first one is required, and must be a string defining the full name of the task. The second argument is an optional table that lists all of the task's *dependencies*, and the last is a function that contains all of the task's logic.
 
 ## Running commands
+Most actions can be performed by running executable commands
+pipe()
+exec()
 
 ## Task dependencies
 
