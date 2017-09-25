@@ -6,6 +6,15 @@
 Rote is a multi-threaded task runner and build tool designed to be easy to use, portable, and fast. Automate your entire development workflow using Rote's scriptable task system to implement builds, deployment, and maintenance using a unified script syntax.
 
 
+## Status
+**Rote is basically unfinished and on hold indefinitely. The actual rule and task running works rather well, and is very fast, but the tool isn't fleshed out, nor is the Rotefile syntax finalized. This is not recommended to be used outside of experiments.**
+
+I don't have enough personal bandwidth to work on Rote at this point, and Rote deserves more thought to be put into its design. I fully intend to revisit Rote in the future, as I believe it is something that is sorely needed today as a "spiritual successor" to Make. Lua may or may not be the right script language, though coroutines might make the run process faster.
+
+Go ahead and download Rote, try it out, see what you like and what you don't. I'd *love* to hear your opinions; I'm always listening via email ([me@stephencoakley.com](mailto:me@stephencoakley.com)) or on Twitter ([@sagebind](https://twitter.com/sagebind)).
+
+---
+
 ## Features
 - Ridiculously fast.
 - Task parallelization with threading.
