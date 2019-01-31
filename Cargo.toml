@@ -12,7 +12,7 @@ glob = "0.2"
 json = "0.10"
 log = "0.3"
 num_cpus = "0.2"
-regex = "0.1"
+regex = "1.1"
 term = "0.4"
 
 [dependencies.hyper]
