@@ -16,7 +16,7 @@ regex = "0.1"
 term = "0.4"
 
 [dependencies.hyper]
-version = "0.9"
+version = "0.12"
 default-features = false
 
 [dependencies.lua]
